@@ -24,7 +24,7 @@ https://cloud.google.com/functions/docs/tutorials/storage
      --project $PROJECT_ID 
     ```
 
-  * Create pub/sub subscription for debug purposes
+* Create pub/sub subscription for debug purposes
     ```
      gcloud pubsub subscriptions create extracted-text \
      --topic calvin-text-extract \
@@ -39,7 +39,7 @@ https://cloud.google.com/functions/docs/tutorials/storage
      --project $PROJECT_ID 
     ```
 
-  * Create pub/sub subscription for debug purposes
+* Create pub/sub subscription for debug purposes
     ```
     gcloud pubsub subscriptions create data-writer \
      --topic calvin-data-writer \
@@ -48,6 +48,7 @@ https://cloud.google.com/functions/docs/tutorials/storage
     ```
 
 # Create BQ dataset and table
+
   * Create dataset
     ```
     bq  --project_id $PROJECT_ID  mk calvin
@@ -56,7 +57,7 @@ https://cloud.google.com/functions/docs/tutorials/storage
   * Create table
     ```
     bq --project_id $PROJECT_ID query --use_legacy_sql=false \
-  'CREATE TABLE calvin.calvin_text ( 
+    'CREATE TABLE calvin.calvin_text ( 
       bucket STRING(256), 
       filename STRING(256), 
       syntax_text STRING(1024) ,
@@ -257,7 +258,7 @@ https://cloud.google.com/functions/docs/tutorials/storage
   ```
 
 
-# Web frontend for access
+# Web frontend
 
 * Deploy the web-ui function
     ```
