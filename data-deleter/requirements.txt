@@ -1,4 +1,5 @@
-google.api_core
 google.cloud
+google.cloud.storage
 google.cloud.bigquery
+google.api_core
 functions-framework==3.2.0

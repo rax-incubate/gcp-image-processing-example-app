@@ -1,5 +1,3 @@
-https://cloud.google.com/functions/docs/tutorials/storage
-
 # Common
 
 * Setup your env variables
@@ -141,7 +139,6 @@ https://cloud.google.com/functions/docs/tutorials/storage
      --project $PROJECT_ID
     ```
 
-
 # Data writer 
 
 * Update env.yaml with the right values
@@ -191,9 +188,9 @@ https://cloud.google.com/functions/docs/tutorials/storage
 
  * Create a SSL cert
     ```
-    gcloud compute ssl-certificates create calvindemo \
+    gcloud compute ssl-certificates create calvinhobbs-org \
      --description=Calvin \
-     --domains=calvindemo.tty0.me \
+     --domains=calvinhobbs.org \
      --global \
      --project $PROJECT_ID 
     ```
@@ -204,9 +201,15 @@ https://cloud.google.com/functions/docs/tutorials/storage
    gcloud compute network-endpoint-groups create calvin \
     --region=us-east1 \
     --network-endpoint-type=serverless  \
-    --cloud-function-name=web-ui \
+    --cloud-function-url-mask="calvinhobbs.org/<function>" \
     --project $PROJECT_ID 
     ```
+    * Delete command
+      ```
+      gcloud compute network-endpoint-groups delete calvin \
+       --region=us-east1 \
+       --project $PROJECT_ID
+      ``` 
 
  * Create a backend
 
@@ -216,6 +219,13 @@ https://cloud.google.com/functions/docs/tutorials/storage
     --global \
     --project $PROJECT_ID 
   ```
+
+    * Delete command
+      ```
+      gcloud compute backend-services delete calvin \
+       --global \
+       --project $PROJECT_ID 
+      ```
 
  * Add the serverless NEG as a backend to the backend service:
 
@@ -227,22 +237,32 @@ https://cloud.google.com/functions/docs/tutorials/storage
     --project $PROJECT_ID 
   ```
 
-
  * Create a URL map to route incoming requests to the backend service:
   ```
    gcloud compute url-maps create calvin \
     --default-service calvin \
     --project $PROJECT_ID 
   ```
+    * Delete command
+      ```
+      gcloud compute url-maps delete calvin \
+       --project $PROJECT_ID 
+      ```
 
  * Create an HTTPS target proxy. The proxy is the portion of the load balancer that holds the SSL certificate for HTTPS Load Balancing, so you also load your certificate in this step.
 
   ```
    gcloud compute target-https-proxies create calvin \
-    --ssl-certificates=calvindemo \
+    --ssl-certificates=calvinhobbs-org \
     --url-map=calvin \
     --project $PROJECT_ID 
   ```
+
+    * Delete command
+      ```
+      gcloud compute target-https-proxies delete calvin \
+        --project $PROJECT_ID 
+      ```
 
  * Create a forwarding rule to route incoming requests to the proxy.
 
@@ -256,6 +276,13 @@ https://cloud.google.com/functions/docs/tutorials/storage
        --ports=443 \
        --project $PROJECT_ID 
   ```
+
+    * Delete command
+      ```
+      gcloud compute forwarding-rules delete calvin \
+       --global \
+       --project $PROJECT_ID 
+      ```
 
 
 # Web frontend
@@ -274,7 +301,6 @@ https://cloud.google.com/functions/docs/tutorials/storage
      --env-vars-file env.yaml \
      --project $PROJECT_ID
     ```
-
 
 # Extract sentiment
 
@@ -304,20 +330,19 @@ https://cloud.google.com/functions/docs/tutorials/storage
      --project $PROJECT_ID
     ```
 
-
 # Process image delete eventa
 
 * Update env.yaml with the right values
 
 * Deploy the extract-text function
     ```
-    cd $CLONE_FOLDER/delete-images
-    gcloud functions deploy delete-images \
+    cd $CLONE_FOLDER/data-deleter
+    gcloud functions deploy data-deleter \
      --gen2 \
      --runtime=python310 \
      --region=us-east1 \
      --source=. \
-     --entry-point=new_image_file \
+     --entry-point=delete_image_data \
      --trigger-event-filters="type=google.cloud.storage.object.v1.deleted" \
      --trigger-event-filters="bucket=calvin-images"  \
      --env-vars-file env.yaml \
@@ -339,8 +364,6 @@ https://cloud.google.com/functions/docs/tutorials/storage
 
     ```
 
-
-
 # Detect faces
 
 Not Implemented
@@ -348,12 +371,30 @@ Not Implemented
 
 # Metrics and monitors
 
-Not Implemented
+See cloud-monitoring-dashboard.json for metrics dashboard
 
+Log query:-
+
+```
+(resource.type = "cloud_run_revision"
+resource.labels.service_name = "extract-text"
+resource.labels.location = "us-east1") OR 
+(resource.type = "cloud_run_revision"
+resource.labels.service_name = "extract-syntax"
+resource.labels.location = "us-east1") OR 
+(resource.type = "cloud_run_revision"
+resource.labels.service_name = "extract-sentiment"
+resource.labels.location = "us-east1")  OR 
+(resource.type = "cloud_run_revision"
+resource.labels.service_name = "data-writer"
+resource.labels.location = "us-east1")  OR 
+(resource.type = "cloud_run_revision"
+resource.labels.service_name = "web-ui"
+resource.labels.location = "us-east1")
+ severity>=ERROR
+```
 
 
 # Test with lots of data
 
 Not Implemented
-
-

@@ -68,6 +68,7 @@ def process_image(bucket_name: str, file_name: str, eid: str):
     result = client.process_document(request=request)
 
     extracted_text = result.document
+
     publish_text(bucket_name, file_name, extracted_text.text, eid)
 
 
@@ -78,6 +79,11 @@ def publish_text(bucket_name: str, file_name: str, extracted_text, eid: str):
     debugx = False
     if os.environ.get('DEBUGX') == "1":
         debugx = True
+
+    if debugx:
+        print(f"DEBUGX:{eid}: Bucket: {bucket_name}")
+        print(f"DEBUGX:{eid}: File name: {file_name}")
+        print(f"DEBUGX:{eid}: extracted text: {extracted_text}")
 
     project_id = os.environ.get('PROJECT_ID')
     topic_id = os.environ.get('TOPIC_ID')
@@ -95,6 +101,10 @@ def publish_text(bucket_name: str, file_name: str, extracted_text, eid: str):
 
     json_data = json.dumps(data)
     data = json_data.encode("utf-8")
+
+    if debugx:
+        print(f"DEBUGX:" + eid + ":" + "Data sent:" + json_data)
+
     future = publisher.publish(topic_path, data)
     if debugx:
         print(f"DEBUGX:{eid}: {future.result()}")
