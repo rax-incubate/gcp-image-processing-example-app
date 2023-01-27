@@ -24,7 +24,7 @@ def new_text(cloud_event):
 
     extract_sentiment(msg_content, eid)
 
-
+# Extract the overall message sentiment from all the extracted text
 def extract_sentiment(msg_content, eid):
     debugx = False
     if os.environ.get('DEBUGX') == "1":
@@ -50,18 +50,10 @@ def extract_sentiment(msg_content, eid):
     sentiment_score = response.document_sentiment.score
     sentiment_magnitude = response.document_sentiment.magnitude
 
-
     if debugx:
-        print(f"DEBUGX:{eid}: Sentiment Score: {sentiment_score}")
-        print(f"DEBUGX:{eid}: Sentiment Magnitude: {sentiment_magnitude}")
+        print(f"DEBUGX:{eid}: Sentiment Score: {sentiment_score}, Sentiment Magnitude: {sentiment_magnitude}")
 
     publish_text(json_data['bucket'], json_data['file_name'], sentiment_score, sentiment_magnitude, eid)
-
-
-# Clearly Positive*	"score": 0.8, "magnitude": 3.0
-# Clearly Negative*	"score": -0.6, "magnitude": 4.0
-# Neutral	"score": 0.1, "magnitude": 0.0
-# Mixed	"score": 0.0, "magnitude": 4.0
 
 
 # Publish the extracted words to pub sub

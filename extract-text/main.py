@@ -23,15 +23,10 @@ def new_image_file(cloud_event):
 
     bucket = data["bucket"]
     name = data["name"]
-    metageneration = data["metageneration"]
-    timeCreated = data["timeCreated"]
-    updated = data["updated"]
 
     if debugx:
-        print(f"DEBUGX:{eid}: Event ID: {event_id}")
-        print(f"DEBUGX:{eid}: Event type: {event_type}")
-        print(f"DEBUGX:{eid}: Bucket: {bucket}")
-        print(f"DEBUGX:{eid}: File: {name}")
+        print(f"DEBUGX:{eid}:Event type:{event_type},Bucket:{bucket},File:{filename}")
+
     process_image(bucket, name, eid)
 
 # Get image content and extract text using document AI
@@ -51,9 +46,7 @@ def process_image(bucket_name: str, file_name: str, eid: str):
     mime_type = "image/png"
 
     image_content = bucket.get_blob(file_name).download_as_bytes()
-
     opts = ClientOptions(api_endpoint=f"us-documentai.googleapis.com")
-
     client = documentai.DocumentProcessorServiceClient(client_options=opts)
 
     proc_name = client.processor_path(project_no, proc_location, proc_id)
@@ -62,11 +55,8 @@ def process_image(bucket_name: str, file_name: str, eid: str):
         print(f"DEBUGX:{eid}: Processor name: {proc_name}")
 
     raw_document = documentai.RawDocument(content=image_content, mime_type=mime_type)
-
     request = documentai.ProcessRequest(name=proc_name, raw_document=raw_document)
-
     result = client.process_document(request=request)
-
     extracted_text = result.document
 
     publish_text(bucket_name, file_name, extracted_text.text, eid)
@@ -81,9 +71,7 @@ def publish_text(bucket_name: str, file_name: str, extracted_text, eid: str):
         debugx = True
 
     if debugx:
-        print(f"DEBUGX:{eid}: Bucket: {bucket_name}")
-        print(f"DEBUGX:{eid}: File name: {file_name}")
-        print(f"DEBUGX:{eid}: extracted text: {extracted_text}")
+        print(f"DEBUGX:{eid}:extracted text:{extracted_text},Bucket:{bucket},File:{filename}")
 
     project_id = os.environ.get('PROJECT_ID')
     topic_id = os.environ.get('TOPIC_ID')

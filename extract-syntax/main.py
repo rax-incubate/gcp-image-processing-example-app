@@ -23,6 +23,7 @@ def new_text(cloud_event):
 
     extract_syntax(msg_content, eid)
 
+
 # extract word tokens and filter by figures of speech
 def extract_syntax(msg_content, eid):
     debugx = False
@@ -46,22 +47,23 @@ def extract_syntax(msg_content, eid):
         request={"document": document, "encoding_type": encoding_type}
     )
 
+    # We only need these for now
     useful_parts_of_speech = ["NOUN", "ADJ", "VERB"]
     extracted_words = ""
     for token in response.tokens:
         text = token.text
-        if debugx:
-            print("DEBUGX:" + eid + ":Token text: {}".format(text.content))
         part_of_speech = token.part_of_speech
         if language_v1.PartOfSpeech.Tag(part_of_speech.tag).name in useful_parts_of_speech:
             if extracted_words == "":
                 extracted_words = extracted_words + text.content
             else:
                 extracted_words = extracted_words + " " + text.content
+
     if debugx:
         print(f"DEBUGX:{eid}: Extracted words: {extracted_words}")
 
     publish_text(json_data['bucket'], json_data['file_name'], extracted_words, eid)
+
 
 # Publish the extracted words to pub sub
 def publish_text(bucket_name: str, file_name: str, syntax_data, eid):

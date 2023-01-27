@@ -61,21 +61,23 @@ At an high level,
 
 ## Storage Setup
 
-  * Create bucket for the images
+  * Create bucket for the images. This bucket needs to be publicly accessible as we will also use this in our public facing web interface
     ```
-    gsutil mb -l us-east1 gs://calvin-images`
+    gsutil mb -l us-east1 gs://calvin-images
+    gsutil iam ch allUsers:objectViewer gs://calvin-images
     ```
 
 ## Create pub sub topics
 
-  * Create pub/sub topic
+
+  * Create pub/sub topic for the text extraction 
     ```
     gcloud pubsub topics create calvin-text-extract \
      --message-retention-duration 3d \
      --project $PROJECT_ID 
     ```
 
-    * Create pub/sub subscription for debug and demo purposes
+    * (Optional) Create pub/sub subscription for debug and demo purposes
     ```
      gcloud pubsub subscriptions create extracted-text \
      --topic calvin-text-extract \
@@ -83,20 +85,20 @@ At an high level,
      --project $PROJECT_ID 
     ```
 
-  * Create pub/sub topic
+  * Create pub/sub topic for processed text that will be writted to the database
     ```
     gcloud pubsub topics create calvin-data-writer \
      --message-retention-duration 3d \
      --project $PROJECT_ID 
     ```
 
-  * Create pub/sub subscription for debug/demo purposes
-    ```
-    gcloud pubsub subscriptions create data-writer \
-     --topic calvin-data-writer \
-     --retain-acked-messages \
-     --project $PROJECT_ID 
-    ```
+    * (Optional)Create pub/sub subscription for debug/demo purposes
+      ```
+      gcloud pubsub subscriptions create data-writer \
+      --topic calvin-data-writer \
+      --retain-acked-messages \
+      --project $PROJECT_ID 
+      ```
 
 ## Create BQ dataset and table
 
@@ -129,9 +131,34 @@ At an high level,
     --role roles/pubsub.publisher
     ```
 
-  * Update env.yaml with the right values
+  * Create a processor in Document AI. There is no glcoud equivalent for this
+    ```
+  tee proc-request.json <<EOF
+{
+"type": "Document OCR",
+"displayName": "calvin-images"
+}
+EOF
+    ```
+    ```
+    curl -X POST \
+      -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+      -H "Content-Type: application/json; charset=utf-8" \
+      -d @proc-request.json \
+      "https://us-documentai.googleapis.com/v1/projects/$PROJECT_ID/locations/us/processors"
+    ```
 
-  * Deploy the extract-text function
+  * Update `env.yaml` with the right values. Leave DEBUGX to 1 for additional logging.
+    ```
+PROJECT_ID: "<your project id>"
+PROJECT_NO: "<your project no>"
+PROC_LOCATION: us
+PROC_ID: 99abb1af27652b15
+TOPIC_ID: calvin-text-extract
+DEBUGX: "1"
+    ```
+
+  * Deploy the extract-text function. This function will extract text using OCR. 
     ```
     cd $CLONE_FOLDER/extract-text
     gcloud functions deploy extract-text \
@@ -146,7 +173,7 @@ At an high level,
      --project $PROJECT_ID
     ```
 
-  * Test with a sample image 
+  * Unit test the function with a sample image 
     ```
     gsutil cp sample.png gs://calvin-images/sample.png
     ```
@@ -167,9 +194,20 @@ At an high level,
 
 ## Extract syntax
 
-  * Update env.yaml with the right values
+This service uses the NLP API to extract word tokens. See below for code snippets
 
-  * Deploy the extract-syntax function
+  * Update `env.yaml` with the right values
+    ```
+PROJECT_ID: "<your project id>"
+PROJECT_NO: "<your project no>"
+PROC_LOCATION: us
+SUBSCRIPTION_ID: extracted-text
+SUBSCRIPTION_TIMEOUT: "10"
+TOPIC_ID: "calvin-data-writer"
+DEBUGX: "1"
+    ```
+
+  * Deploy the extract-syntax function. 
     ```
     cd $CLONE_FOLDER/extract-syntax
     gcloud functions deploy extract-syntax \
@@ -195,9 +233,20 @@ At an high level,
 
 ## Extract sentiment
 
-  * Update env.yaml with the right values
+This service uses the NLP API to extract sentiment from the extracted text. See below for code snippets
 
-  * Deploy the extract-sentiment function
+  * Update env.yaml with the right values
+    ```
+PROJECT_ID: "<your project id>"
+PROJECT_NO: "<your project no>"
+PROC_LOCATION: us
+SUBSCRIPTION_ID: extracted-text
+SUBSCRIPTION_TIMEOUT: "10"
+TOPIC_ID: "calvin-data-writer"
+DEBUGX: "1"
+    ```
+
+  * Deploy the extract-sentiment function. 
     ```
     cd $CLONE_FOLDER/extract-sentiment
     gcloud functions deploy extract-sentiment \
@@ -223,9 +272,19 @@ At an high level,
   
 ## Data writer 
 
-  * Update env.yaml with the right values
+This service does a simple job of taking values and writing it into Big Query. Think of this as the data service that can be replaced with something else. For example write to Cloud SQL or Spanner. You can also have multiple data-writers.
 
-  * Deploy the data-writer function
+
+  * Update env.yaml with the values
+    ```
+PROJECT_ID: "<your project id>"
+PROJECT_NO: "<your project no>"
+BQ_DATASET_ID: "calvin"
+BQ_TABLE_ID: "calvin_text"
+DEBUGX: "1"
+    ```
+
+  * Deploy the data-writer function. 
     ```
     cd $CLONE_FOLDER/data-writer
     gcloud functions deploy data-writer \
@@ -252,9 +311,18 @@ At an high level,
 
 ## Process image delete eventa
 
-  * Update env.yaml with the right values
+This service takes care of images that are deleted from the GCS bucket. Again this is built separately to allow for different process for deletion. In this example, we are just cleaning up the table but this could easily do other things like update some 3rd party system or rebuild a cache etc. 
 
-  * Deploy the extract-text function
+  * Update env.yaml with the right values
+    ```
+PROJECT_ID: "<your project id>"
+PROJECT_NO: "<your project no>"
+BQ_DATASET_ID: "calvin"
+BQ_TABLE_ID: "calvin_text"
+DEBUGX: "1"
+    ```
+
+  * Deploy the data-deleter function. 
     ```
     cd $CLONE_FOLDER/data-deleter
     gcloud functions deploy data-deleter \
@@ -278,15 +346,11 @@ At an high level,
      --project $PROJECT_ID
     ```
 
-  * Check pub/sub for topic update
-    ```
-    gcloud pubsub subscriptions pull extracted-text --project $PROJECT_ID 
-
-    ```
-
 ## Web frontend
+This is a simple service that provides a web interface to demonstrate the working of the the whole application. This function does two things. It lists all the images in the database. It also allows searching using the keywords or sentiment type.  For this example, we have a standalone function but we could put a load balancer in front it and make this part of larger application or custom domain. 
 
-  * Deploy the web-ui function
+
+  * Deploy the web-ui function. 
     ```
     cd $CLONE_FOLDER/web-ui
     gcloud functions deploy web-ui \
@@ -304,31 +368,43 @@ At an high level,
   
 ## Metrics and monitors
 
-See cloud-monitoring-dashboard.json for metrics dashboard
+One of the challenges of a micro-services architecture is to build observability into the application. When one of these many micro-services mis-behaves how do you find that out and how do you troubleshoot. There are two approaches we have taken
 
-Log query:-
+  * Build custom dashboard just for this application. See cloud-monitoring-dashboard.json for metrics dashboard that can be imported. If you have stayed with the naming convention of the functions this should work without any changes. 
 
-```
-(resource.type = "cloud_run_revision"
-resource.labels.service_name = "extract-text"
-resource.labels.location = "us-east1") OR 
-(resource.type = "cloud_run_revision"
-resource.labels.service_name = "extract-syntax"
-resource.labels.location = "us-east1") OR 
-(resource.type = "cloud_run_revision"
-resource.labels.service_name = "extract-sentiment"
-resource.labels.location = "us-east1")  OR 
-(resource.type = "cloud_run_revision"
-resource.labels.service_name = "data-writer"
-resource.labels.location = "us-east1")  OR 
-(resource.type = "cloud_run_revision"
-resource.labels.service_name = "data-deleter"
-resource.labels.location = "us-east1")  OR 
-(resource.type = "cloud_run_revision"
-resource.labels.service_name = "web-ui"
-resource.labels.location = "us-east1")
- severity>=DEFAULT
-```
+  * The code requires some instrumentation in the form of debug messages. You can also incorporate things like open telemetry into this. For the sake of simplicity we have stayed with simple print statements to capture key stages of the code execution. Cloud Logging does the rest and you can query logs using this. 
+    ```
+    (resource.type = "cloud_run_revision"
+    resource.labels.service_name = "extract-text"
+    resource.labels.location = "us-east1") OR 
+    (resource.type = "cloud_run_revision"
+    resource.labels.service_name = "extract-syntax"
+    resource.labels.location = "us-east1") OR 
+    (resource.type = "cloud_run_revision"
+    resource.labels.service_name = "extract-sentiment"
+    resource.labels.location = "us-east1")  OR 
+    (resource.type = "cloud_run_revision"
+    resource.labels.service_name = "data-writer"
+    resource.labels.location = "us-east1")  OR 
+    (resource.type = "cloud_run_revision"
+    resource.labels.service_name = "data-deleter"
+    resource.labels.location = "us-east1")  OR 
+    (resource.type = "cloud_run_revision"
+    resource.labels.service_name = "web-ui"
+    resource.labels.location = "us-east1")
+    severity>=DEFAULT
+    ```
 
 ## Test with lots of data
-Not Implemented
+
+If you have reached this far, you have a fully working application but to confirm let's do a test
+
+ * Run the following end-to-end test
+  ```
+  ```
+
+
+ * If the above works, time to make this work at scale
+  ```
+  ```
+
