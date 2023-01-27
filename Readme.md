@@ -47,7 +47,7 @@ At an high level,
 
   * Clone the repo
     ```
-    git clone 
+    git clone https://github.com/RSS-Engineering/calvin
     ```
 
   * Authenticate to Google and make sure you have access to a Project
@@ -133,13 +133,14 @@ At an high level,
 
   * Create a processor in Document AI. There is no glcoud equivalent for this
     ```
-  tee proc-request.json <<EOF
-{
-"type": "Document OCR",
-"displayName": "calvin-images"
-}
-EOF
+    tee proc-request.json <<EOF
+    {
+    "type": "Document OCR",
+    "displayName": "calvin-images"
+    }
+    EOF
     ```
+
     ```
     curl -X POST \
       -H "Authorization: Bearer $(gcloud auth print-access-token)" \
@@ -150,12 +151,12 @@ EOF
 
   * Update `env.yaml` with the right values. Leave DEBUGX to 1 for additional logging.
     ```
-PROJECT_ID: "<your project id>"
-PROJECT_NO: "<your project no>"
-PROC_LOCATION: us
-PROC_ID: 99abb1af27652b15
-TOPIC_ID: calvin-text-extract
-DEBUGX: "1"
+    PROJECT_ID: "<your project id>"
+    PROJECT_NO: "<your project no>"
+    PROC_LOCATION: us
+    PROC_ID: 99abb1af27652b15
+    TOPIC_ID: calvin-text-extract
+    DEBUGX: "1"
     ```
 
   * Deploy the extract-text function. This function will extract text using OCR. 
@@ -198,13 +199,13 @@ This service uses the NLP API to extract word tokens. See below for code snippet
 
   * Update `env.yaml` with the right values
     ```
-PROJECT_ID: "<your project id>"
-PROJECT_NO: "<your project no>"
-PROC_LOCATION: us
-SUBSCRIPTION_ID: extracted-text
-SUBSCRIPTION_TIMEOUT: "10"
-TOPIC_ID: "calvin-data-writer"
-DEBUGX: "1"
+    PROJECT_ID: "<your project id>"
+    PROJECT_NO: "<your project no>"
+    PROC_LOCATION: us
+    SUBSCRIPTION_ID: extracted-text
+    SUBSCRIPTION_TIMEOUT: "10"
+    TOPIC_ID: "calvin-data-writer"
+    DEBUGX: "1"
     ```
 
   * Deploy the extract-syntax function. 
@@ -277,11 +278,11 @@ This service does a simple job of taking values and writing it into Big Query. T
 
   * Update env.yaml with the values
     ```
-PROJECT_ID: "<your project id>"
-PROJECT_NO: "<your project no>"
-BQ_DATASET_ID: "calvin"
-BQ_TABLE_ID: "calvin_text"
-DEBUGX: "1"
+    PROJECT_ID: "<your project id>"
+    PROJECT_NO: "<your project no>"
+    BQ_DATASET_ID: "calvin"
+    BQ_TABLE_ID: "calvin_text"
+    DEBUGX: "1"
     ```
 
   * Deploy the data-writer function. 
@@ -315,11 +316,11 @@ This service takes care of images that are deleted from the GCS bucket. Again th
 
   * Update env.yaml with the right values
     ```
-PROJECT_ID: "<your project id>"
-PROJECT_NO: "<your project no>"
-BQ_DATASET_ID: "calvin"
-BQ_TABLE_ID: "calvin_text"
-DEBUGX: "1"
+    PROJECT_ID: "<your project id>"
+    PROJECT_NO: "<your project no>"
+    BQ_DATASET_ID: "calvin"
+    BQ_TABLE_ID: "calvin_text"
+    DEBUGX: "1"
     ```
 
   * Deploy the data-deleter function. 
