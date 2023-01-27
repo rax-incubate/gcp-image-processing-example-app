@@ -2,7 +2,7 @@
 
 This tutorial focuses on the use GCP's AI services to do following 
 
- - Extract Text from a large array of comic strips. We will focus on Calvin and Hobbes (https://en.wikipedia.org/wiki/Calvin_and_Hobbes) for this example but this could be any comic strip.
+ - Extract Text from a large array of comic strips. We will focus on[Calvin and Hobbes](https://en.wikipedia.org/wiki/Calvin_and_Hobbes) for this example but this could be any comic strip.
 
  - Analyse syntax of the extracted text. In case of syntax, we mean words and use the automated parts of speech extraction in GCP's natural language processing
 
@@ -31,7 +31,7 @@ We are also imposing some self-imposed technological constraints to test the pow
 
 Here's the design we will implement
 
-!(design.png)
+![](design.png)
 
 At an high level, 
   * Image data arrives in a GCP bucket
