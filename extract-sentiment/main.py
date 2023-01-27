@@ -81,9 +81,8 @@ def publish_text(bucket_name: str, file_name: str, sentiment_score, sentiment_ma
     data = {}
     data['bucket'] = bucket_name
     data['file_name'] = file_name
-    data['sentiment_data'] = {} 
-    data['sentiment_data']['score'] = sentiment_score
-    data['sentiment_data']['magnitude'] = sentiment_magnitude
+    data['sentiment_score'] = sentiment_score
+    data['sentiment_magnitude'] = sentiment_magnitude
 
     json_data = json.dumps(data)
     data = json_data.encode("utf-8")

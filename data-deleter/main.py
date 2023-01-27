@@ -22,15 +22,9 @@ def delete_image_data(cloud_event):
 
     bucket = data["bucket"]
     filename = data["name"]
-    metageneration = data["metageneration"]
-    timeCreated = data["timeCreated"]
-    updated = data["updated"]
 
     if debugx:
-        print(f"DEBUGX:{eid}: Event ID: {event_id}")
-        print(f"DEBUGX:{eid}: Event type: {event_type}")
-        print(f"DEBUGX:{eid}: Bucket: {bucket}")
-        print(f"DEBUGX:{eid}: File: {filename}")
+        print(f"DEBUGX:{eid}:Event type:{event_type},Bucket:{bucket},File:{filename}")
     delete_data(bucket, filename, eid)
 
 
@@ -40,25 +34,23 @@ def delete_data(bucket, filename, eid):
     if os.environ.get('DEBUGX') == "1":
         debugx = True
 
-    project_no = os.environ.get('PROJECT_NO')
     bq_dataset_id = os.environ.get('BQ_DATASET_ID')
     bq_table_id = os.environ.get('BQ_TABLE_ID')
 
     if debugx:
-        print(f"DEBUGX:" + eid + ":" + "BQ Dataset ID:" + bq_dataset_id)
-        print(f"DEBUGX:" + eid + ":" + "BQ Table ID:" + bq_table_id)
-        print(f"DEBUGX:" + eid + ":" + "Bucket:" + bucket)
-        print(f"DEBUGX:" + eid + ":" + "Bucket:" + filename)
+        print(f"DEBUGX:{eid}:BQ Dataset:{bq_dataset_id},Table:{bq_table_id},Bucket:{bucket},File:{filename}")
 
     client = bigquery.Client()
-    
-    sql =  list()
+
+    sql = list()
     sql.append("DELETE FROM " + bq_dataset_id + "." + bq_table_id)
     sql.append(" WHERE bucket='" + bucket + "'")
     sql.append(" AND filename='" + filename + "'")
-    query =  "".join(sql)
+    query = "".join(sql)
 
     if debugx:
         print(f"DEBUGX:" + eid + ":" + "Query:" + query)
+    query_job = client.query(query)
 
-    query_job = client.query(query) 
+    if query_job.errors:
+        print("CRITICAL: Error in executing query")

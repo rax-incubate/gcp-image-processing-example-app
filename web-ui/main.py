@@ -13,6 +13,7 @@ def new_request(request):
     debugx = False
     if os.environ.get('DEBUGX') == "1":
         debugx = True
+
     request_json = request.get_json(silent=True)
     request_args = request.args
 
@@ -29,11 +30,30 @@ def new_request(request):
     if debugx:
         print(f"DEBUGX:" + eid + ":Search:" + str(search or ''))
 
-    client = bigquery.Client()
-    if search is None:
-        query = "SELECT bucket, filename, syntax_text, sentiment_score FROM " + bq_dataset_id + "." + bq_table_id + " LIMIT 20"
+    if request_json and 'sentiment' in request_json:
+        sentiment = request_json['sentiment']
+    elif request_args and 'sentiment' in request_args:
+        sentiment = request_args['sentiment']
     else:
-        query = "SELECT bucket, filename, syntax_text, sentiment_score FROM " + bq_dataset_id + "." + bq_table_id + " WHERE REGEXP_CONTAINS(syntax_text,r'(?i){}') LIMIT 20".format(search)
+        sentiment = None
+
+    if debugx:
+        print(f"DEBUGX:" + eid + ":sentiment:" + str(sentiment or ''))
+
+    client = bigquery.Client()
+    query = "SELECT DISTINCT filename, bucket FROM " + bq_dataset_id + "." + bq_table_id + " LIMIT 20"
+
+    if search is not None:
+        query = "SELECT DISTINCT filename, bucket FROM " + bq_dataset_id + "." + bq_table_id + " WHERE REGEXP_CONTAINS(syntax_text,r'(?i){}') LIMIT 20".format(search)
+
+    if sentiment == "positive":
+        query = "SELECT DISTINCT filename, bucket FROM " + bq_dataset_id + "." + bq_table_id + " WHERE sentiment_score >= 0.2 AND sentiment_magnitude >= 3.0 LIMIT 20"
+
+    if sentiment == "negative":
+        query = "SELECT DISTINCT filename, bucket FROM " + bq_dataset_id + "." + bq_table_id + " WHERE sentiment_score <= -0.2 AND sentiment_magnitude >= 3.0 LIMIT 20"
+
+    if sentiment == "neutral":
+        query = "SELECT DISTINCT filename, bucket FROM " + bq_dataset_id + "." + bq_table_id + " WHERE sentiment_score >= 0.0 AND sentiment_score <= 0.2 AND sentiment_magnitude <= 0.0 LIMIT 20"
 
     if debugx:
         print(f"DEBUGX:" + eid + ":Query:" + query)
@@ -51,7 +71,7 @@ def new_request(request):
 
 """)
     if rows.total_rows == 0:
-        html.append("<b>No results found</b>")
+        html.append("<b>No results found !</b>")
     else:
         col_cnt = 0 
         first_row = True
@@ -65,7 +85,8 @@ def new_request(request):
                     html.append("<tr>\n")
                 col_cnt = 0
             html.append("<td>\n")
-            html.append("<img src=https://storage.googleapis.com/{}/{}>\n".format(row["bucket"], row["filename"]))
+            html.append("<img src=https://storage.googleapis.com/{}/{} alt={}>\n".format(row["bucket"], row["filename"], row["filename"]))
+            html.append("File:{}".format(row["filename"]))
             html.append("</td>\n")
             col_cnt = col_cnt + 1
         html.append("</tr>\n")
