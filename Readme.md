@@ -238,13 +238,13 @@ This service uses the NLP API to extract sentiment from the extracted text. See 
 
   * Update env.yaml with the right values
     ```
-PROJECT_ID: "<your project id>"
-PROJECT_NO: "<your project no>"
-PROC_LOCATION: us
-SUBSCRIPTION_ID: extracted-text
-SUBSCRIPTION_TIMEOUT: "10"
-TOPIC_ID: "calvin-data-writer"
-DEBUGX: "1"
+    PROJECT_ID: "<your project id>"
+    PROJECT_NO: "<your project no>"
+    PROC_LOCATION: us
+    SUBSCRIPTION_ID: extracted-text
+    SUBSCRIPTION_TIMEOUT: "10"
+    TOPIC_ID: "calvin-data-writer"
+    DEBUGX: "1"
     ```
 
   * Deploy the extract-sentiment function. 
