@@ -22,17 +22,17 @@ def new_image_file(cloud_event):
     event_type = cloud_event["type"]
 
     bucket = data["bucket"]
-    name = data["name"]
+    filename = data["name"]
 
     if debugx:
         print(f"DEBUGX:{eid}:Event type:{event_type},Bucket:{bucket},File:{filename}")
 
-    process_image(bucket, name, eid)
+    process_image(bucket, filename, eid)
 
 # Get image content and extract text using document AI
 
 
-def process_image(bucket_name: str, file_name: str, eid: str):
+def process_image(bucket_name: str, filename: str, eid: str):
     debugx = False
     if os.environ.get('DEBUGX') == "1":
         debugx = True
@@ -45,7 +45,7 @@ def process_image(bucket_name: str, file_name: str, eid: str):
     bucket = storage_client.bucket(bucket_name)
     mime_type = "image/png"
 
-    image_content = bucket.get_blob(file_name).download_as_bytes()
+    image_content = bucket.get_blob(filename).download_as_bytes()
     opts = ClientOptions(api_endpoint=f"us-documentai.googleapis.com")
     client = documentai.DocumentProcessorServiceClient(client_options=opts)
 
@@ -59,13 +59,13 @@ def process_image(bucket_name: str, file_name: str, eid: str):
     result = client.process_document(request=request)
     extracted_text = result.document
 
-    publish_text(bucket_name, file_name, extracted_text.text, eid)
+    publish_text(bucket_name, filename, extracted_text.text, eid)
 
 
 # Publish image metadata and extracted text to pub/sub
 
 
-def publish_text(bucket_name: str, file_name: str, extracted_text, eid: str):
+def publish_text(bucket: str, filename: str, extracted_text, eid: str):
     debugx = False
     if os.environ.get('DEBUGX') == "1":
         debugx = True
@@ -83,8 +83,8 @@ def publish_text(bucket_name: str, file_name: str, extracted_text, eid: str):
         print(f"DEBUGX:{eid}: Topic path: {topic_path}")
 
     data = {}
-    data['bucket'] = bucket_name
-    data['file_name'] = file_name
+    data['bucket'] = bucket
+    data['file_name'] = filename
     data['extracted_text'] = extracted_text
 
     json_data = json.dumps(data)
