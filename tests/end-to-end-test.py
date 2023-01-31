@@ -84,8 +84,14 @@ if p_status == 0:
 else:
     print(f"{msg}: Fail")
 
+cmd = "gcloud functions describe web-ui --project $PROJECT_ID  --region=us-east1  --format='value(serviceConfig.uri)'"
+if debugx:
+    print(cmd)
+p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+(output, err) = p.communicate()
+url = output.decode() + "?search=BATHROOM FLUSH"
 
-cmd = "curl -s https://web-ui-fpxn5dkopa-ue.a.run.app/?search=BATHROOM FLUSH | grep 'alt=" + filename + "'"
+cmd = "curl -s " + url + " | grep 'alt=" + filename + "'"
 if debugx:
     print(cmd)
 p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
