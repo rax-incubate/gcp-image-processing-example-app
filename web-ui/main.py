@@ -41,19 +41,19 @@ def new_request(request):
         print(f"DEBUGX:" + eid + ":sentiment:" + str(sentiment or ''))
 
     client = bigquery.Client()
-    query = "SELECT DISTINCT filename, bucket FROM " + bq_dataset_id + "." + bq_table_id + " LIMIT 20"
+    query = "SELECT DISTINCT filename, bucket FROM " + bq_dataset_id + "." + bq_table_id + " LIMIT 100"
 
     if search is not None:
         query = "SELECT DISTINCT filename, bucket FROM " + bq_dataset_id + "." + bq_table_id + " WHERE REGEXP_CONTAINS(syntax_text,r'(?i){}') LIMIT 20".format(search)
 
     if sentiment == "positive":
-        query = "SELECT DISTINCT filename, bucket FROM " + bq_dataset_id + "." + bq_table_id + " WHERE sentiment_score >= 0.2 AND sentiment_magnitude >= 3.0 LIMIT 20"
+        query = "SELECT DISTINCT filename, bucket FROM " + bq_dataset_id + "." + bq_table_id + " WHERE sentiment_score >= 0.1 AND sentiment_magnitude >= 2.0 LIMIT 100"
 
     if sentiment == "negative":
-        query = "SELECT DISTINCT filename, bucket FROM " + bq_dataset_id + "." + bq_table_id + " WHERE sentiment_score <= -0.2 AND sentiment_magnitude >= 3.0 LIMIT 20"
+        query = "SELECT DISTINCT filename, bucket FROM " + bq_dataset_id + "." + bq_table_id + " WHERE sentiment_score <= -0.1 AND sentiment_magnitude >= 3.0 LIMIT 100"
 
     if sentiment == "neutral":
-        query = "SELECT DISTINCT filename, bucket FROM " + bq_dataset_id + "." + bq_table_id + " WHERE sentiment_score >= 0.0 AND sentiment_score <= 0.2 AND sentiment_magnitude <= 0.0 LIMIT 20"
+        query = "SELECT DISTINCT filename, bucket FROM " + bq_dataset_id + "." + bq_table_id + " WHERE sentiment_score >= -0.1 AND sentiment_score <= 0.1  LIMIT 100"
 
     if debugx:
         print(f"DEBUGX:" + eid + ":Query:" + query)
@@ -71,8 +71,9 @@ def new_request(request):
 
 """)
     if rows.total_rows == 0:
-        html.append("<b>No results found !</b>")
+        html.append("<b>No results found.</b>")
     else:
+        html.append(f"<b>Showing {rows.total_rows} results.</b>")
         col_cnt = 0 
         first_row = True
         for row in rows:
