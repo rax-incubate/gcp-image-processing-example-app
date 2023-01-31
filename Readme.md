@@ -373,7 +373,7 @@ One of the challenges of a micro-services architecture is to build observability
 
   * Build custom dashboard just for this application. See cloud-monitoring-dashboard.json for metrics dashboard that can be imported. If you have stayed with the naming convention of the functions this should work without any changes. 
 
-![](sample-monitoring-dashboard.png)
+![](monitoring/sample-monitoring-dashboard.png)
 
 
   * The code requires some instrumentation in the form of debug messages. You can also incorporate things like open telemetry into this. For the sake of simplicity we have stayed with simple print statements to capture key stages of the code execution. Cloud Logging does the rest and you can query logs using this. 
