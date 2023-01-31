@@ -340,7 +340,7 @@ This service takes care of images that are deleted from the GCS bucket. Again th
 
   * Review logs for function execution
     ```
-    gcloud beta functions logs read extract-text \
+    gcloud beta functions logs read data-deleter \
      --gen2 \
      --limit=100 \
      --region=us-east1 \
