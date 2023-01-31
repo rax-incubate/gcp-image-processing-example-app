@@ -16,18 +16,17 @@ This tutorial focuses on the use GCP's AI services to do following
 
 We are also imposing some self-imposed technological constraints to test the powers of the GCP serverless platforms. 
 
- - All code will be in implemented in Cloud Functions. We will use version 2 which uses Cloud Run under the hood.  Technically, that means, we can package this code into containers and run it on Cloud Run.
+ - All code will be in implemented in Cloud Functions. We will use gen 2 which uses Cloud Run under the hood.  Technically, that means, we can package this code into containers and run it on Cloud Run as well.
 
- - Keep the code simple and use Cloud Functions for single tasks. This also introduces a micro-services like design. 
+ - Keep the Application architecture simple and use Cloud Functions for single modular tasks. This effectively introduces a micro-services like design. 
 
- - Pub/Sub will provide the message bus for the distributed processing 
+ - Use Pub/Sub as a message bus for the distributed and async processing 
 
- - Cloud Functions will also service any web-frontend
+ - Use cloud Functions to service any web-frontend. We will skip using a load balancer for simplicity
 
  - File storage will be Google Cloud Storage (GCS)
 
- - Relational data storage will be done using Big Query. We can use Cloud SQL or Cloud Spanner but they were discarded in order to reduce cost. 
-
+ - Relational data storage will be done using Big Query. We can use Cloud SQL or Cloud Spanner but they were discarded in order to reduce overall cost. 
 
 Here's the design we will implement
 
@@ -140,7 +139,7 @@ We assume this is done on an empty project without any specific restrictions. us
     --role roles/pubsub.publisher
     ```
 
-  * Create a processor in Document AI. There is no glcoud equivalent for this
+  * Create a processor in Document AI. There is no glcoud equivalent for this. This can also be done in Python if needed.
     ```
     tee proc-request.json <<EOF
     {
@@ -442,3 +441,72 @@ If you have reached this far, you have a fully working application but to confir
     gsutil -q cp -c gs://calvin.tty0.me/calvin-{6,7,8}{1..9}{1..9}.png  gs://calvin-images/
     ```
 
+## Cost governance
+
+Overall, running the above should not cost more than 5 to 10 USD per month. Google Cloud is very cost-effective when it comes to experimentation of this kind.  
+
+ * Cloud functions are free up to 2 million invocations. Beyond that it is 0.40 USD per million. More at [](https://cloud.google.com/functions/pricing)
+
+ * Cloud storage is $0.020 per Gigabyte per month. More at [](https://cloud.google.com/storage/pricing)
+
+ * For Big Query , 1 TB of queries and 10GB of storage is free every month.
+ 
+ * For Cloud Logging, 50 GiB of logs ingestion is free and if you stick to default retention (30 days), they don't incur any cost.  Cost of ingestion beyond 50GB is 0.50/GiB 
+
+ * For DocumentAI, OCR on 1000 images will cost about 1.5 USD More at [](https://cloud.google.com/document-ai/pricing)
+
+ * For Cloud Natural Language, syntax & sentiment analysis is a bit more complex to asses. 5000 Units per month are free which equates to 5 million characters processed. We will be well within that tier for this example. 
+  * Beyond that, syntax analyis costs 0.5 USD per 1000 units & sentiment analysis costs 1 USD per 1000 units
+  * More at [](https://cloud.google.com/natural-language/pricing)
+
+* For Cloud Natural Language, sentiment analysis is a bit more complex to asses. 5000 Units per month are free which equates to 5 million characters processed. We will be well within that tier for this example. More at [](https://cloud.google.com/natural-language/pricing)
+ 
+ * All said, you can also clean up the whole using the following
+  * Cleanup the functions
+    ```
+    gcloud functions delete web-ui --region=us-east1 --project $PROJECT_ID
+    gcloud functions delete data-deleter --region=us-east1 --project $PROJECT_ID
+    gcloud functions delete data-writer --region=us-east1 --project $PROJECT_ID
+    gcloud functions delete extract-sentiment --region=us-east1 --project $PROJECT_ID
+    gcloud functions delete extract-syntax --region=us-east1 --project $PROJECT_ID
+    gcloud functions delete extract-text --region=us-east1 --project $PROJECT_ID
+    gcloud pubsub topics delete calvin-text-extract --project $PROJECT_ID 
+    gcloud pubsub topics delete calvin-data-writer--project $PROJECT_ID
+    ```
+
+  * Cleanup the storage
+  ```
+  gsutil rm -r -l us-east1 gs://calvin-images
+  gsutil rb gs://calvin-images
+  bq --project_id $PROJECT_ID query --use_legacy_sql=false 'DROP TABLE calvin.calvin_text;'
+  ```
+
+  * Delete the processor in Document AI. There is no glcoud equivalent for this
+  ```
+  curl -X DELETE \
+    -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+    -H "Content-Type: application/json; charset=utf-8" \
+    "https://us-documentai.googleapis.com/v1/projects/$PROJECT_ID/locations/us/processors/cavlin-images"
+  ```
+
+## What next?
+
+We suggest the following :-
+
+ * Find a data set.
+
+   * [Oxford-IIIT Pet Images Dataset](https://www.robots.ox.ac.uk/~vgg/data/pets/): This pet image dataset features many categories with 200+ images for each class. 
+   
+   * [Plant Image Analysis](https://www.quantitative-plant.org/dataset): This is a compilation of over 1 million images of plants, with the choice of roughly 11 species of plants. 
+   
+   * [Celebfaces](http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html)]: This image dataset features over 200,000 images of celebrities.
+   
+   * [Google’s Open Images](https://ai.googleblog.com/2016/09/introducing-open-images-dataset.html): One of the largest of the image datasets 
+
+   * You might have your own
+
+ * Fork the repo
+
+ * Build your own code with the example above
+
+ * Share your experiments
