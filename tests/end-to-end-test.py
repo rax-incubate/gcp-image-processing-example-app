@@ -19,17 +19,17 @@ filename = "sample" + str(uuid.uuid4().hex) + ".png"
 cmd = "gsutil -q cp -c gs://calvin.tty0.me/calvin-999.png  gs://calvin-images/" + filename
 if debugx:
     print(cmd)
-p = subprocess.Popen(cmd , stdout=subprocess.PIPE, shell=True)
+p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
 (output, err) = p.communicate()
 p_status = p.wait()
-msg=f"gsutil test file upload {filename}"
+msg = f"gsutil test file upload {filename}"
 if p_status == 0:
     print(f"{msg}: Success")
 else:
     print(f"{msg}: Fail")
 
 
-print("Waiting 7 seconds")
+print("Waiting 7 seconds...")
 time.sleep(7)
 
 cmd = "gcloud beta functions logs read extract-text --gen2 --region=us-east1 --project $PROJECT_ID | grep '" + filename + "'"
@@ -38,13 +38,13 @@ if debugx:
 p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
 (output, err) = p.communicate()
 p_status = p.wait()
-msg="Received event in Text extract service"
+msg = "Received event in Text extract service"
 if p_status == 0:
     print(f"{msg}: Success")
 else:
     print(f"{msg}: Fail")
 
-print("Waiting 7 seconds")
+print("Waiting 7 seconds...")
 time.sleep(7)
 
 cmd = 'gcloud beta functions logs read extract-text --gen2 --region=us-east1 --project $PROJECT_ID | grep ' + "'" + 'Data sent:{"bucket": "calvin-images", "file_name": "' + filename + '", "extracted_text": "GOING TO THE\nBATHROOM.\nFLUSH' + "'"
@@ -53,7 +53,7 @@ if debugx:
 p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
 (output, err) = p.communicate()
 p_status = p.wait()
-msg="Text extraction"
+msg = "Text extraction"
 if p_status == 0:
     print(f"{msg}: Success")
 else:
@@ -65,7 +65,7 @@ if debugx:
 p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
 (output, err) = p.communicate()
 p_status = p.wait()
-msg="Text syntax extraction"
+msg = "Text syntax extraction"
 if p_status == 0:
     print(f"{msg}: Success")
 else:
@@ -78,7 +78,7 @@ if debugx:
 p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
 (output, err) = p.communicate()
 p_status = p.wait()
-msg="Text sentiment extraction"
+msg = "Text sentiment extraction"
 if p_status == 0:
     print(f"{msg}: Success")
 else:
@@ -91,7 +91,7 @@ if debugx:
 p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
 (output, err) = p.communicate()
 p_status = p.wait()
-msg="Web search"
+msg = "Web search"
 if p_status == 0:
     print(f"{msg}: Success")
 else:
@@ -103,24 +103,23 @@ if debugx:
 p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
 (output, err) = p.communicate()
 p_status = p.wait()
-msg="gsutil test file delete"
+msg = "gsutil test file delete"
 if p_status == 0:
     print(f"{msg}: Success")
 else:
     print(f"{msg}: Fail")
 
-print("Waiting 7 seconds")
+print("Waiting 7 seconds...")
 time.sleep(7)
 
-cmd = 'gcloud beta functions logs read data-deleter --gen2 --region=us-east1 --project $PROJECT_ID | grep "'  + "DELETE FROM calvin.calvin_text WHERE bucket='calvin-images' AND filename='" + filename + "'" + '"' 
+cmd = 'gcloud beta functions logs read data-deleter --gen2 --region=us-east1 --project $PROJECT_ID | grep "' + "DELETE FROM calvin.calvin_text WHERE bucket='calvin-images' AND filename='" + filename + "'" + '"'
 if debugx:
     print(cmd)
 p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
 (output, err) = p.communicate()
 p_status = p.wait()
-msg="Data Deleter"
+msg = "Data Deleter"
 if p_status == 0:
     print(f"{msg}: Success")
 else:
     print(f"{msg}: Fail")
-
