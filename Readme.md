@@ -43,6 +43,15 @@ At an high level,
 
 # Implementation
 
+## Pick a GCP project
+
+We assume this is done on an empty project without any specific restrictions. us-east1 is the region used but this could work in any region with those services. 
+
+ * Enable the APIs we need
+ ```
+ ```
+
+
 ## Setup the environment
 
   * Clone the repo
@@ -50,7 +59,7 @@ At an high level,
     git clone https://github.com/RSS-Engineering/calvin
     ```
 
-  * Authenticate to Google and make sure you have access to a Project
+  * Authenticate to Google and make sure you have access to the Project
 
   * Setup your env variables
     ```
@@ -371,7 +380,7 @@ This is a simple service that provides a web interface to demonstrate the workin
 
 One of the challenges of a micro-services architecture is to build observability into the application. When one of these many micro-services mis-behaves how do you find that out and how do you troubleshoot. There are two approaches we have taken
 
-  * Build custom dashboard just for this application. See cloud-monitoring-dashboard.json for metrics dashboard that can be imported. If you have stayed with the naming convention of the functions this should work without any changes. 
+  * Build custom dashboard just for this application. See cloud-monitoring-dashboard.json for metrics dashboard that can be imported. If you have stayed with the naming convention of the functions in this article, this should work without any changes.  Here's a screenshot:-
 
 ![](monitoring/sample-monitoring-dashboard.png)
 
@@ -401,14 +410,35 @@ One of the challenges of a micro-services architecture is to build observability
 
 ## Test with lots of data
 
-If you have reached this far, you have a fully working application but to confirm let's do a test
+If you have reached this far, you have a fully working application but to confirm let's do a test.
 
- * Run the following end-to-end test
+ * Run the following end-to-end test. This will upload a sample image and put it through the different stages of text extraction, syntax extraction, sentiment analysis and finally delete the image.
   ```
+  cd tests 
+  python end-to-end-test.py 
+  ```
+  Expected output:
+  ```
+  gsutil test file upload sample9fed94a72f3d454aba227a068704a33f.png: Success
+  Waiting 7 seconds...
+  Received event in Text extract service: Success
+  Waiting 7 seconds...
+  Text extraction: Success
+  Text syntax extraction: Success
+  Text sentiment extraction: Success
+  Web search: Success
+  gsutil test file delete: Success
+  Waiting 7 seconds...
+  Data Deleter: Success
   ```
 
 
- * If the above works, time to make this work at scale
+ * If the above works, time to make this work at scale. This will test against approx 100 images
   ```
-  ```
+  gsutil -q cp -c gs://calvin.tty0.me/calvin-9{1..9}{1..9}.png  gs://calvin-images/
+  ````
+    * If we need more images 
+    ```
+    gsutil -q cp -c gs://calvin.tty0.me/calvin-{6,7,8}{1..9}{1..9}.png  gs://calvin-images/
+    ```
 
