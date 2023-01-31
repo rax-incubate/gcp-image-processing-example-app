@@ -2,7 +2,7 @@
 
 This tutorial focuses on the use GCP's AI services to do following 
 
- - Extract Text from a large array of comic strips. We will focus on[Calvin and Hobbes](https://en.wikipedia.org/wiki/Calvin_and_Hobbes) for this example but this could be any comic strip.
+ - Extract Text from a large array of comic strips. We will focus on [Calvin and Hobbes](https://en.wikipedia.org/wiki/Calvin_and_Hobbes) for this example but this could be any comic strip.
 
  - Analyse syntax of the extracted text. In case of syntax, we mean words and use the automated parts of speech extraction in GCP's natural language processing
 
@@ -372,6 +372,9 @@ This is a simple service that provides a web interface to demonstrate the workin
 One of the challenges of a micro-services architecture is to build observability into the application. When one of these many micro-services mis-behaves how do you find that out and how do you troubleshoot. There are two approaches we have taken
 
   * Build custom dashboard just for this application. See cloud-monitoring-dashboard.json for metrics dashboard that can be imported. If you have stayed with the naming convention of the functions this should work without any changes. 
+
+![](sample-monitoring-dashboard.png)
+
 
   * The code requires some instrumentation in the form of debug messages. You can also incorporate things like open telemetry into this. For the sake of simplicity we have stayed with simple print statements to capture key stages of the code execution. Cloud Logging does the rest and you can query logs using this. 
     ```
