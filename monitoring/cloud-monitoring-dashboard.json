@@ -269,9 +269,6 @@
         "widget": {
           "logsPanel": {
             "filter": "(resource.type = \"cloud_run_revision\"\nresource.labels.service_name = \"extract-text\"\nresource.labels.location = \"us-east1\") OR \n(resource.type = \"cloud_run_revision\"\nresource.labels.service_name = \"extract-syntax\"\nresource.labels.location = \"us-east1\") OR \n(resource.type = \"cloud_run_revision\"\nresource.labels.service_name = \"extract-sentiment\"\nresource.labels.location = \"us-east1\")  OR \n(resource.type = \"cloud_run_revision\"\nresource.labels.service_name = \"data-writer\"\nresource.labels.location = \"us-east1\")  OR \n(resource.type = \"cloud_run_revision\"\nresource.labels.service_name = \"data-deleter\"\nresource.labels.location = \"us-east1\")  OR \n(resource.type = \"cloud_run_revision\"\nresource.labels.service_name = \"web-ui\"\nresource.labels.location = \"us-east1\")\n severity>=DEFAULT",
-            "resourceNames": [
-              "projects/483363017449"
-            ]
           },
           "title": "Logs"
         },
