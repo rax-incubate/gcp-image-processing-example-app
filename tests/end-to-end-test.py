@@ -6,6 +6,7 @@ import os
 import time
 
 debugx = False
+GS_BUCKET="gs://calvin-images/"
 
 if os.environ.get('DEBUGX') == "1":
         debugx = True
@@ -16,7 +17,7 @@ if shutil.which("gsutil") is None or shutil.which("gcloud") is None or shutil.wh
 
 
 filename = "sample" + str(uuid.uuid4().hex) + ".png"
-cmd = "gsutil -q cp -c gs://calvin.tty0.me/calvin-999.png  gs://calvin-images/" + filename
+cmd = "gsutil -q cp -c test.png " + GS_BUCKET  + filename
 if debugx:
     print(cmd)
 p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
@@ -89,7 +90,7 @@ if debugx:
     print(cmd)
 p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
 (output, err) = p.communicate()
-url = output.decode() + "?search=BATHROOM FLUSH"
+url = output.decode().replace('\n','') + "?search=BATHROOM FLUSH"
 
 cmd = "curl -s " + url + " | grep 'alt=" + filename + "'"
 if debugx:
@@ -103,7 +104,7 @@ if p_status == 0:
 else:
     print(f"{msg}: Fail")
 
-cmd = f"gsutil -q rm gs://calvin-images/{filename}"
+cmd = f"gsutil -q rm {GS_BUCKET}{filename}"
 if debugx:
     print(cmd)
 p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
