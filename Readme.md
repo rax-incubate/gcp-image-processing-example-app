@@ -1,8 +1,8 @@
 # Summary
 
-This tutorial focuses on the use GCP's AI services to do following 
+This article/tutorial in an experiment with AI services on GCP using a sample application. We will be doing the following :-
 
- - Extract Text from a large array of comic strips. We will focus on [Calvin and Hobbes](https://en.wikipedia.org/wiki/Calvin_and_Hobbes) for this example but this could be any comic strip.
+ - Extract Text from a large array of comic strips. We will focus on [Calvin and Hobbes](https://en.wikipedia.org/wiki/Calvin_and_Hobbes) for this example but this could be any comic strip you have some images for. 
 
  - Analyse syntax of the extracted text. In case of syntax, we mean words and use the automated parts of speech extraction in GCP's natural language processing
 
@@ -10,46 +10,58 @@ This tutorial focuses on the use GCP's AI services to do following
 
  - Build a basic but working web-interface to test and demo the working of these examples
 
- - Other areas of interest which maybe developed in the future
+ - Read the comics in the process. Why not? 
+
+ - Other areas of interest which maybe developed in the future include:
   - Extract entities in text
   - Detect faces in the images
 
-We are also imposing some self-imposed technological constraints to test the powers of the GCP serverless platforms. 
+From a design standpoint, we are also imposing some self-imposed technological constraints to test the powers of the Google Cloud Serverless platforms.  The following are the design principles.
 
- - All code will be in implemented in Cloud Functions. We will use gen 2 which uses Cloud Run under the hood.  Technically, that means, we can package this code into containers and run it on Cloud Run as well.
+ - All code will be in implemented directly in Cloud Functions. We will use gen 2 which uses Cloud Run under the hood.  Technically, that means, we can package this code into containers and run it on Cloud Run as well. 
 
- - Keep the Application architecture simple and use Cloud Functions for single modular tasks. This effectively introduces a micro-services like design. 
+ - Keep the application architecture simple and use separate functions for modular tasks. This effectively introduces a micro-services like design. 
 
  - Use Pub/Sub as a message bus for the distributed and async processing 
 
- - Use cloud Functions to service any web-frontend. We will skip using a load balancer for simplicity
+ - Use cloud Functions to service any web-frontend. We will skip using a load balancer for simplicity. Cloud functions already has an GCP managed load balancer and unless you are using custom domains, you don't need a load balancer. It is easy to front this with a load balancer. 
 
  - File storage will be Google Cloud Storage (GCS)
 
- - Relational data storage will be done using Big Query. We can use Cloud SQL or Cloud Spanner but they were discarded in order to reduce overall cost. 
+ - Relational data storage will be done using Big Query. We could have used Cloud SQL or Cloud Spanner but they were discarded in order to reduce overall cost.  Big Query was by far the most cost-effective option. 
 
-Here's the design we will implement
+Here's the visual of the design we will implement:
 
 ![](design.png)
 
 At an high level, 
   * Image data arrives in a GCP bucket
-  * Event processing is triggered to extract text from the image 
-  * Extracted text is sent to NLP for syntax processing
-  * Extracted text is sent to NLP for sentiment processing
-  * All information are stored in a database
-  * A web based frontend shows the results and allows demos
+  * GCS Event processing is triggered to extract text from the image 
+  * Extracted text is sent to NLP for syntax processing in separate jobs
+  * Extracted text is sent to NLP for sentiment processing in separate jobs
+  * All processed information are stored in a database by a data-writer job
+  * A separate job handles delete events
+  * A very simple web based frontend shows the results and is used for demos
 
 # Implementation
 
-## Pick a GCP project
+## Pick/create a GCP project
 
 We assume this is done on an empty project without any specific restrictions. us-east1 is the region used but this could work in any region with those services. 
 
- * Enable the APIs we need
- ```
- ```
+  * Authenticate to Google and make sure you have access to the Project. 
+  
+  * Set the project in the cli
+  ```
+  gcloud config set project calvin-h314
+  ```
 
+  * Enable the APIs we need
+  ```
+  for gcp_service in "documentai.googleapis.com" "cloudfunctions.googleapis.com" "cloudbuild.googleapis.com" "artifactregistry.googleapis.com" "eventarc.googleapis.com" "run.googleapis.com" "language.googleapis.com"; do  gcloud services enable $gcp_service; done
+  ```
+
+  * Get a beverage and read this article. Some of these APIs can take up to 5 minutes to enable. Best to give them some time to activate.
 
 ## Setup the environment
 
@@ -58,13 +70,11 @@ We assume this is done on an empty project without any specific restrictions. us
     git clone https://github.com/RSS-Engineering/calvin
     ```
 
-  * Authenticate to Google and make sure you have access to the Project
-
   * Setup your env variables
     ```
     PROJECT_ID=$(gcloud config get-value project)
     PROJECT_NUMBER=$(gcloud projects list --filter="project_id:$PROJECT_ID" --format='value(project_number)')
-    CLONE_FOLDER="<your folder>"
+    CALVIN_REPO="<your git clone folder>"
     ```
 
 ## Storage Setup
@@ -77,7 +87,6 @@ We assume this is done on an empty project without any specific restrictions. us
 
 ## Create pub sub topics
 
-
   * Create pub/sub topic for the text extraction 
     ```
     gcloud pubsub topics create calvin-text-extract \
@@ -85,13 +94,13 @@ We assume this is done on an empty project without any specific restrictions. us
      --project $PROJECT_ID 
     ```
 
-    * (Optional) Create pub/sub subscription for debug and demo purposes
-    ```
-     gcloud pubsub subscriptions create extracted-text \
-     --topic calvin-text-extract \
-     --retain-acked-messages \
-     --project $PROJECT_ID 
-    ```
+      * (Optional) Create pub/sub subscription for debug and demo purposes
+      ```
+      gcloud pubsub subscriptions create extracted-text \
+      --topic calvin-text-extract \
+      --retain-acked-messages \
+      --project $PROJECT_ID 
+      ```
 
   * Create pub/sub topic for processed text that will be writted to the database
     ```
@@ -100,7 +109,7 @@ We assume this is done on an empty project without any specific restrictions. us
      --project $PROJECT_ID 
     ```
 
-    * (Optional)Create pub/sub subscription for debug/demo purposes
+      * (Optional)Create pub/sub subscription for debug/demo purposes
       ```
       gcloud pubsub subscriptions create data-writer \
       --topic calvin-data-writer \
@@ -130,23 +139,12 @@ We assume this is done on an empty project without any specific restrictions. us
 
 ## Extract text from images
 
-  * Grant IAM access to the KMS service account
-    ```
-    SERVICE_ACCOUNT=$(gsutil kms serviceaccount -p $PROJECT_NUMBER)
+This service uses Document AI to extract text from an image. A GCS event is triggered when an object is uploaded to a bucket and a Cloud function passes the image to Document AI for process. It then collects the extracted text and sends it to a pub/sub topic.
 
-    gcloud projects add-iam-policy-binding $PROJECT_ID \
-    --member serviceAccount:$SERVICE_ACCOUNT \
-    --role roles/pubsub.publisher
-    ```
 
-  * Create a processor in Document AI. There is no glcoud equivalent for this. This can also be done in Python if needed.
+  * Create a processor in Document AI. There is no glcoud equivalent for this. This can also be done in Python if needed. We are also assuming that the processor is in the US region. For this exercise, we recommend keeping this to US and the name of the processor the same as well. If you change this, you will have to change it in the code as well. 
     ```
-    tee proc-request.json <<EOF
-    {
-    "type": "Document OCR",
-    "displayName": "calvin-images"
-    }
-    EOF
+    echo '{ "type": "OCR_PROCESSOR", "displayName": "calvin-images" }' > proc-request.json
     ```
 
     ```
@@ -157,19 +155,49 @@ We assume this is done on an empty project without any specific restrictions. us
       "https://us-documentai.googleapis.com/v1/projects/$PROJECT_ID/locations/us/processors"
     ```
 
-  * Update `env.yaml` with the right values. Leave DEBUGX to 1 for additional logging.
+  * Get the processor ID is hacky because the cli has no easy way. 
     ```
-    PROJECT_ID: "<your project id>"
-    PROJECT_NO: "<your project no>"
-    PROC_LOCATION: us
-    PROC_ID: 99abb1af27652b15
-    TOPIC_ID: calvin-text-extract
-    DEBUGX: "1"
+    cd $CALVIN_REPO/extract-text
+    DAI_PROC_ID=$(curl -s -X GET -H "Authorization: Bearer $(gcloud auth print-access-token)" -H "Content-Type: application/json; charset=utf-8" "https://us-documentai.googleapis.com/v1/projects/$PROJECT_ID/locations/us/processors" | jq  '.processors[].name' | sed 's/\// /g'  | awk '{print $6}' | sed 's/"//g')
     ```
+      * If you don't have jq, get the ID and update it in the next step 
+        ```
+        curl -s -X GET -H "Authorization: Bearer $(gcloud auth print-access-token)" -H "Content-Type: application/json; charset=utf-8" "https://us-documentai.googleapis.com/v1/projects/$PROJECT_ID/locations/us/processors"
+        ```
+
+  * Grant IAM access to the KMS service account & compute engine service account
+
+    ```
+    KMS_SERVICE_ACCOUNT=$(gsutil kms serviceaccount -p $PROJECT_NUMBER)
+
+    gcloud projects add-iam-policy-binding $PROJECT_ID \
+    --member serviceAccount:$KMS_SERVICE_ACCOUNT \
+    --role roles/pubsub.publisher
+
+    gcloud iam service-accounts add-iam-policy-binding \
+    $PROJECT_NUMBER-compute@developer.gserviceaccount.com \
+    --member serviceAccount\
+    --role roles/iam.serviceAccountUser
+    ```
+    
+  * Update `env.yaml` with the right values.This file is passed to the cloud functions and the values show up as environment variables in the code. Leave DEBUGX to 1 for additional logging. View the env.yaml to make sure this formatted correctly.
+    ```
+    echo -e "PROJECT_ID: \"$PROJECT_ID\"\nPROJECT_NO: \"$PROJECT_NUMBER\"\nPROC_LOCATION: \"us\"\nPROC_ID: \"$DAI_PROC_ID\"\nTOPIC_ID: \"calvin-text-extract\"\nDEBUGX: \"1\"" > env.yaml
+    cat env.yaml
+    ```
+      * Sample env.yaml
+      ```
+      PROJECT_ID: "calvin-h314"
+      PROJECT_NO: "476719929030"
+      PROC_LOCATION: "us"
+      PROC_ID: "f5a19ce0555a6ced"
+      TOPIC_ID: "calvin-text-extract"
+      DEBUGX: "1"
+      ```
 
   * Deploy the extract-text function. This function will extract text using OCR. 
     ```
-    cd $CLONE_FOLDER/extract-text
+    cd $CALVIN_REPO/extract-text
     gcloud functions deploy extract-text \
      --gen2 \
      --runtime=python310 \
@@ -182,7 +210,7 @@ We assume this is done on an empty project without any specific restrictions. us
      --project $PROJECT_ID
     ```
 
-  * Unit test the function with a sample image 
+  * Unit test the function with a sample image. This repo
     ```
     gsutil cp sample.png gs://calvin-images/sample.png
     ```
@@ -195,30 +223,42 @@ We assume this is done on an empty project without any specific restrictions. us
      --region=us-east1 \
      --project $PROJECT_ID
     ```
+      * Sample output
+      ```
+      extract-text  2023-02-01 16:03:10.954  DEBUGX:88ddede4ff2a4f3c996cd25185eb280c:Data sent:{"bucket": "calvin-images", "file_name": "sample.png", "extracted_text": "EENIE, MEENIE, MINEY, MOE!\nCATCH A TIGER BY THE TOE!\nIF HE HOLLERS, UM.\u2026.. UH....\nHEH HEH...\nM\nWHO WRITES\nTHESE DUMB\nTHINGS ANYWAY?\n"}
+      extract-text  2023-02-01 16:03:10.954  DEBUGX:88ddede4ff2a4f3c996cd25185eb280c: Topic path: projects/calvin-h314/topics/calvin-text-extract
+      extract-text  2023-02-01 16:03:10.950  ,Bucket:calvin-images,File:sample.png
+      extract-text  2023-02-01 16:03:10.950  THINGS ANYWAY?
+      extract-text  2023-02-01 16:03:10.950  THESE DUMB
+      ```
 
-  * Check pub/sub for topic update
+  * Delete the image. At this point we have the most basic of functions in place and the start of event stream.
     ```
-    gcloud pubsub subscriptions pull extracted-text --project $PROJECT_ID 
+    gsutil rm gs://calvin-images/sample.png
     ```
 
 ## Extract syntax
 
-This service uses the NLP API to extract word tokens. See below for code snippets
+Now, we move to the language elements. This service uses the NLP API to extract word tokens. The NLP syntax API extracts parts of speech and you can filter by the ones you want. For this example we are only extracting the following types: "NOUN", "ADJ", "VERB". This extracted syntax is then passed to a pub/sub topic for data entry.
 
-  * Update `env.yaml` with the right values
+  * Update `env.yaml` with the right values. Leave DEBUGX to 1 for additional logging. View the env.yaml to make sure this formatted correctly.
     ```
-    PROJECT_ID: "<your project id>"
-    PROJECT_NO: "<your project no>"
-    PROC_LOCATION: us
-    SUBSCRIPTION_ID: extracted-text
-    SUBSCRIPTION_TIMEOUT: "10"
-    TOPIC_ID: "calvin-data-writer"
-    DEBUGX: "1"
+    cd $CALVIN_REPO/extract-syntax
+
+    echo -e "PROJECT_ID: \"$PROJECT_ID\"\nPROJECT_NO: \"$PROJECT_NUMBER\"\nTOPIC_ID: \"calvin-data-writer\"\nDEBUGX: \"1\"" > env.yaml
+    cat env.yaml
     ```
+        * Sample env.yaml
+        ```
+        PROJECT_ID: "calvin-h314"
+        PROJECT_NO: "476719929030"
+        TOPIC_ID: "calvin-data-writer"
+        DEBUGX: "1"
+        ```
 
   * Deploy the extract-syntax function. 
     ```
-    cd $CLONE_FOLDER/extract-syntax
+    cd $CALVIN_REPO/extract-syntax
     gcloud functions deploy extract-syntax \
      --gen2 \
      --runtime=python310 \
@@ -231,7 +271,7 @@ This service uses the NLP API to extract word tokens. See below for code snippet
      --project $PROJECT_ID
     ```
 
-  * Review logs for function execution
+  * Review logs for function deployment. If there any errors, they will show up. We will do end to end tests later. 
     ```
     gcloud beta functions logs read extract-syntax \
      --gen2 \
@@ -242,18 +282,21 @@ This service uses the NLP API to extract word tokens. See below for code snippet
 
 ## Extract sentiment
 
-This service uses the NLP API to extract sentiment from the extracted text. See below for code snippets
+Similar to the syntax service, this service uses the NLP API to extract sentiment from the extracted text. The sentiment score and magnitude for all the text is then passed to a pub/sub topic for data entry. 
 
-  * Update env.yaml with the right values
+  * Update `env.yaml` with the right values. Leave DEBUGX to 1 for additional logging. View the env.yaml to make sure this formatted correctly.
     ```
-    PROJECT_ID: "<your project id>"
-    PROJECT_NO: "<your project no>"
-    PROC_LOCATION: us
-    SUBSCRIPTION_ID: extracted-text
-    SUBSCRIPTION_TIMEOUT: "10"
-    TOPIC_ID: "calvin-data-writer"
-    DEBUGX: "1"
+    cd $CALVIN_REPO/extract-sentiment
+    echo -e "PROJECT_ID: \"$PROJECT_ID\"\nPROJECT_NO: \"$PROJECT_NUMBER\"\nTOPIC_ID: \"calvin-data-writer\"\nDEBUGX: \"1\"" > env.yaml
+    cat env.yaml
     ```
+      * Sample env.yaml
+      ```
+      PROJECT_ID: "calvin-h314"
+      PROJECT_NO: "476719929030"
+      TOPIC_ID: "calvin-data-writer"
+      DEBUGX: "1"
+      ```
 
   * Deploy the extract-sentiment function. 
     ```
@@ -270,7 +313,7 @@ This service uses the NLP API to extract sentiment from the extracted text. See 
      --project $PROJECT_ID
     ```
 
-  * Review logs for function execution
+  * Review logs for function deployment. If there any errors, they will show up. We will do end to end tests later. 
     ```
     gcloud beta functions logs read extract-sentiment \
      --gen2 \
@@ -283,16 +326,20 @@ This service uses the NLP API to extract sentiment from the extracted text. See 
 
 This service does a simple job of taking values and writing it into Big Query. Think of this as the data service that can be replaced with something else. For example write to Cloud SQL or Spanner. You can also have multiple data-writers.
 
-
-  * Update env.yaml with the values
+  * Update `env.yaml` with the right values. Leave DEBUGX to 1 for additional logging. View the env.yaml to make sure this formatted correctly.
     ```
-    PROJECT_ID: "<your project id>"
-    PROJECT_NO: "<your project no>"
-    BQ_DATASET_ID: "calvin"
-    BQ_TABLE_ID: "calvin_text"
-    DEBUGX: "1"
+    cd $CALVIN_REPO/data-writer
+    echo -e "PROJECT_ID: \"$PROJECT_ID\"\nPROJECT_NO: \"$PROJECT_NUMBER\"\nBQ_DATASET_ID: \"calvin\"\nBQ_TABLE_ID: \"calvin_text\"\nDEBUGX: \"1\"" > env.yaml
+    cat env.yaml
     ```
-
+      * Sample env.yaml
+      ```
+      PROJECT_ID: "calvin-h314"
+      PROJECT_NO: "476719929030"
+      BQ_DATASET_ID: "calvin"
+      BQ_TABLE_ID: "calvin_text"
+      DEBUGX: "1"
+      ```
   * Deploy the data-writer function. 
     ```
     cd $CLONE_FOLDER/data-writer
@@ -308,7 +355,7 @@ This service does a simple job of taking values and writing it into Big Query. T
      --project $PROJECT_ID
     ```
 
-  * Review logs for function execution
+  * Review logs for function deployment. If there any errors, they will show up. We will do end to end tests later. 
     ```
     gcloud beta functions logs read data-writer \
      --gen2 \
@@ -322,18 +369,23 @@ This service does a simple job of taking values and writing it into Big Query. T
 
 This service takes care of images that are deleted from the GCS bucket. Again this is built separately to allow for different process for deletion. In this example, we are just cleaning up the table but this could easily do other things like update some 3rd party system or rebuild a cache etc. 
 
-  * Update env.yaml with the right values
+  * Update `env.yaml` with the right values. Leave DEBUGX to 1 for additional logging. View the env.yaml to make sure this formatted correctly.
     ```
-    PROJECT_ID: "<your project id>"
-    PROJECT_NO: "<your project no>"
-    BQ_DATASET_ID: "calvin"
-    BQ_TABLE_ID: "calvin_text"
-    DEBUGX: "1"
+    cd $CALVIN_REPO/data-deleter
+    echo -e "PROJECT_ID: \"$PROJECT_ID\"\nPROJECT_NO: \"$PROJECT_NUMBER\"\nBQ_DATASET_ID: \"calvin\"\nBQ_TABLE_ID: \"calvin_text\"\nDEBUGX: \"1\"" > env.yaml
+    cat env.yaml
     ```
+      * Sample env.yaml
+      ```
+      PROJECT_ID: "calvin-h314"
+      PROJECT_NO: "476719929030"
+      BQ_DATASET_ID: "calvin"
+      BQ_TABLE_ID: "calvin_text"
+      DEBUGX: "1"
 
   * Deploy the data-deleter function. 
     ```
-    cd $CLONE_FOLDER/data-deleter
+    cd $CALVIN_REPO/data-deleter
     gcloud functions deploy data-deleter \
      --gen2 \
      --runtime=python310 \
@@ -346,7 +398,7 @@ This service takes care of images that are deleted from the GCS bucket. Again th
      --project $PROJECT_ID
     ```
 
-  * Review logs for function execution
+  * Review logs for function deployment. If there any errors, they will show up. We will do end to end tests later. 
     ```
     gcloud beta functions logs read data-deleter \
      --gen2 \
@@ -358,10 +410,23 @@ This service takes care of images that are deleted from the GCS bucket. Again th
 ## Web frontend
 This is a simple service that provides a web interface to demonstrate the working of the the whole application. This function does two things. It lists all the images in the database. It also allows searching using the keywords or sentiment type.  For this example, we have a standalone function but we could put a load balancer in front it and make this part of larger application or custom domain. 
 
-
+  * Update `env.yaml` with the right values. Leave DEBUGX to 1 for additional logging. View the env.yaml to make sure this formatted correctly.
+    ```
+    cd $CALVIN_REPO/web-ui
+    echo -e "PROJECT_ID: \"$PROJECT_ID\"\nPROJECT_NO: \"$PROJECT_NUMBER\"\nBQ_DATASET_ID: \"calvin\"\nBQ_TABLE_ID: \"calvin_text\"\nDEBUGX: \"1\"" > env.yaml
+    cat env.yaml
+    ```
+      * Sample env.yaml
+      ```
+      PROJECT_ID: "calvin-h314"
+      PROJECT_NO: "476719929030"
+      BQ_DATASET_ID: "calvin"
+      BQ_TABLE_ID: "calvin_text"
+      DEBUGX: "1"
+  
   * Deploy the web-ui function. 
     ```
-    cd $CLONE_FOLDER/web-ui
+    cd $CALVIN_REPO/web-ui
     gcloud functions deploy web-ui \
      --gen2 \
      --allow-unauthenticated \
@@ -374,7 +439,13 @@ This is a simple service that provides a web interface to demonstrate the workin
      --project $PROJECT_ID
     ```
 
-  
+    * Test the URI. This URI will not return any results but it confirms the working of the function.
+    ```
+    WEB_URI=$(gcloud functions describe web-ui  --region=us-east1  --project $PROJECT_ID |grep uri| awk '{print $2}')
+    curl -s $WEB_URI |grep "No results found"
+    ```
+
+
 ## Metrics and monitors
 
 One of the challenges of a micro-services architecture is to build observability into the application. When one of these many micro-services mis-behaves how do you find that out and how do you troubleshoot. There are two approaches we have taken
@@ -384,7 +455,17 @@ One of the challenges of a micro-services architecture is to build observability
 ![](monitoring/sample-monitoring-dashboard.png)
 
 
-  * The code requires some instrumentation in the form of debug messages. You can also incorporate things like open telemetry into this. For the sake of simplicity we have stayed with simple print statements to capture key stages of the code execution. Cloud Logging does the rest and you can query logs using this. 
+    * To create this dashboard, run the following
+    ```
+    cd $CALVIN_REPO/monitoring
+    gcloud monitoring dashboards create \
+    --project $PROJECT_ID\
+    --config-from-file cloud-monitoring-dashboard.json
+    ```
+
+    * Go to the [web console](https://console.cloud.google.com/monitoring/dashboards) and view your dashboard
+
+  * If you just want the logs, the code requires some instrumentation in the form of debug messages. Anything you print to the stdout, you can get in logs. You can also incorporate things like open telemetry into this. For the sake of simplicity we have stayed with simple print statements to capture key stages of the code execution. Cloud Logging does the rest and you can query logs using this. 
     ```
     (resource.type = "cloud_run_revision"
     resource.labels.service_name = "extract-text"
@@ -409,11 +490,11 @@ One of the challenges of a micro-services architecture is to build observability
 
 ## Test with lots of data
 
-If you have reached this far, you have a fully working application but to confirm let's do a test.
+If you have reached this far, you have a fully working application but to confirm let's do an end-to-end test.
 
- * Run the following end-to-end test. This will upload a sample image and put it through the different stages of text extraction, syntax extraction, sentiment analysis and finally delete the image.
+ * Run the following end-to-end test. This will upload a sample image and put it through the different stages of text extraction, syntax extraction, sentiment analysis and finally delete the image. If you are using a different GCS Bucket, update the GS_BUCKET variabel in the code. If you are doing this in a demo, it is most likely to fail :-) 
   ```
-  cd tests 
+  cd $CALVIN_REPO/tests
   python end-to-end-test.py 
   ```
   Expected output:
@@ -431,25 +512,31 @@ If you have reached this far, you have a fully working application but to confir
   Data Deleter: Success
   ```
 
-
- * If the above works, time to make this work at scale. This will test against approx 100 images
+ * If the above works, time to make this work at scale. We have public bucket of Calvin and Hobbes images that we can test with. This will test against approx 100 images
   ```
   gsutil -q cp -c gs://calvin.tty0.me/calvin-9{1..9}{1..9}.png  gs://calvin-images/
-  ````
-    * If we need more images 
-    ```
-    gsutil -q cp -c gs://calvin.tty0.me/calvin-{6,7,8}{1..9}{1..9}.png  gs://calvin-images/
-    ```
+  ```
+
+ * Time to leave the boring console and code and go read some of the comics using the URL below
+  ```
+  uri=$(gcloud functions describe web-ui --project $PROJECT_ID  --region=us-east1  --format='value(serviceConfig.uri)')
+  for s in "search=FLUSH" "search=Cookies" "sentiment=positive" "sentiment=negative"; do echo $uri/?$s; done 
+  ```
+
+ * If we need more images. This has 900+ images. You can test with all but your cost may go up a bit. 
+  ```
+  gsutil -q cp -c gs://calvin.tty0.me/calvin-{6,7,8}{1..9}{1..9}.png  gs://calvin-images/
+  ```
 
 ## Cost governance
 
-Overall, running the above should not cost more than 5 to 10 USD per month. Google Cloud is very cost-effective when it comes to experimentation of this kind.  
+Overall, running the above should not cost more than 5 to 10 USD per month. Google Cloud is very cost-effective when it comes to experimentation of this kind. The costs do go up when you scale. Here's some more information.
 
  * Cloud functions are free up to 2 million invocations. Beyond that it is 0.40 USD per million. More at [](https://cloud.google.com/functions/pricing)
 
  * Cloud storage is $0.020 per Gigabyte per month. More at [](https://cloud.google.com/storage/pricing)
 
- * For Big Query , 1 TB of queries and 10GB of storage is free every month.
+ * For Big Query, 1 TB of queries and 10GB of storage is free every month. Note, something Spanner or Cloud SQL will be a lot more in cost. 
  
  * For Cloud Logging, 50 GiB of logs ingestion is free and if you stick to default retention (30 days), they don't incur any cost.  Cost of ingestion beyond 50GB is 0.50/GiB 
 
@@ -461,24 +548,38 @@ Overall, running the above should not cost more than 5 to 10 USD per month. Goog
 
 * For Cloud Natural Language, sentiment analysis is a bit more complex to asses. 5000 Units per month are free which equates to 5 million characters processed. We will be well within that tier for this example. More at [](https://cloud.google.com/natural-language/pricing)
  
- * All said, you can also clean up the whole using the following
+ * All said, it is always good to clean up after you are done playing.
   * Cleanup the functions
     ```
-    gcloud functions delete web-ui --region=us-east1 --project $PROJECT_ID
-    gcloud functions delete data-deleter --region=us-east1 --project $PROJECT_ID
-    gcloud functions delete data-writer --region=us-east1 --project $PROJECT_ID
-    gcloud functions delete extract-sentiment --region=us-east1 --project $PROJECT_ID
-    gcloud functions delete extract-syntax --region=us-east1 --project $PROJECT_ID
-    gcloud functions delete extract-text --region=us-east1 --project $PROJECT_ID
-    gcloud pubsub topics delete calvin-text-extract --project $PROJECT_ID 
-    gcloud pubsub topics delete calvin-data-writer--project $PROJECT_ID
+    gcloud functions delete web-ui --quiet --gen2 --region=us-east1 --project $PROJECT_ID
+    gcloud functions delete data-deleter --quiet --gen2  --region=us-east1 --project $PROJECT_ID
+    gcloud functions delete data-writer --quiet --gen2 --region=us-east1 --project $PROJECT_ID
+    gcloud functions delete extract-sentiment --quiet --gen2 --region=us-east1 --project $PROJECT_ID
+    gcloud functions delete extract-syntax --quiet --gen2 --region=us-east1 --project $PROJECT_ID
+    gcloud functions delete extract-text --quiet --gen2 --region=us-east1 --project $PROJECT_ID
     ```
 
-  * Cleanup the storage
+  * Delete the pub/sub topics and subscriptions
+    ```
+    gcloud pubsub subscriptions delete extracted-text --project $PROJECT_ID 
+    gcloud pubsub subscriptions delete data-writer --project $PROJECT_ID 
+    gcloud pubsub topics delete calvin-text-extract --project $PROJECT_ID 
+    gcloud pubsub topics delete calvin-data-writer --project $PROJECT_ID
+    ```
+
+  * Cleanup the storage bucket
   ```
-  gsutil rm -r -l us-east1 gs://calvin-images
-  gsutil rb gs://calvin-images
+  gsutil rm -r gs://calvin-images
   bq --project_id $PROJECT_ID query --use_legacy_sql=false 'DROP TABLE calvin.calvin_text;'
+  bq  --project_id $PROJECT_ID  rm -f calvin
+  ```
+
+  * Get the processor ID for calvin-images. There is no method in the API to get this using the human friendly name. 
+  ```
+  curl -X GET -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+     -H "Content-Type: application/json; charset=utf-8"\
+    "https://us-documentai.googleapis.com/v1/projects/$PROJECT_ID/locations/us/processors"
+
   ```
 
   * Delete the processor in Document AI. There is no glcoud equivalent for this
@@ -486,8 +587,18 @@ Overall, running the above should not cost more than 5 to 10 USD per month. Goog
   curl -X DELETE \
     -H "Authorization: Bearer $(gcloud auth print-access-token)" \
     -H "Content-Type: application/json; charset=utf-8" \
-    "https://us-documentai.googleapis.com/v1/projects/$PROJECT_ID/locations/us/processors/cavlin-images"
+    "https://us-documentai.googleapis.com/v1/projects/$PROJECT_ID/locations/us/processors/<REPLACE WITH PROCESSOR ID FROM ABOVE>"
   ```
+
+## Lessons Learnt
+
+ * Cloud is fun. Not the same as Calvin and Hobbes but fun :-)
+
+ * GCP services are great to experiment with. There are lots of online examples to get you started.
+
+ * When using Functions, you have to think through how you will opertionalize the setup for scale. For example, the use of environment variables to trigger debug logging or creating an execution ID that allows you to track end-to-end is very useful.  Having a logging strategy is important and you also have to decide log retention etc.
+
+ * Start simple and then pile on. It is amazing what momentum brings when you have little wins.  
 
 ## What next?
 
@@ -503,7 +614,7 @@ We suggest the following :-
    
    * [Google’s Open Images](https://ai.googleblog.com/2016/09/introducing-open-images-dataset.html): One of the largest of the image datasets 
 
-   * You might have your own
+   * You might have your own. Maybe your photo collection.
 
  * Fork the repo
 
