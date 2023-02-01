@@ -455,44 +455,44 @@ One of the challenges of a micro-services architecture is to build observability
 ![](monitoring/sample-monitoring-dashboard.png)
 
 
-    * To create this dashboard, run the following
-    ```
-    cd $CALVIN_REPO/monitoring
-    gcloud monitoring dashboards create \
-    --project $PROJECT_ID\
-    --config-from-file cloud-monitoring-dashboard.json
-    ```
+  * To create this dashboard, run the following
+  ```
+  cd $CALVIN_REPO/monitoring
+  gcloud monitoring dashboards create \
+  --project $PROJECT_ID\
+  --config-from-file cloud-monitoring-dashboard.json
+  ```
 
-    * Go to the [web console](https://console.cloud.google.com/monitoring/dashboards) and view your dashboard
+  * Go to the [web console](https://console.cloud.google.com/monitoring/dashboards) and view your dashboard
 
   * If you want the logs, the code requires some instrumentation in the form of debug messages. Anything you print to the stdout, you can get in logs. You can also incorporate things like open telemetry into this. For simplicity, we have stayed with simple print statements to capture key stages of the code execution. Cloud Logging does the rest, and you can query logs using this. 
-    ```
-    (resource.type = "cloud_run_revision"
-    resource.labels.service_name = "extract-text"
-    resource.labels.location = "us-east1") OR 
-    (resource.type = "cloud_run_revision"
-    resource.labels.service_name = "extract-syntax"
-    resource.labels.location = "us-east1") OR 
-    (resource.type = "cloud_run_revision"
-    resource.labels.service_name = "extract-sentiment"
-    resource.labels.location = "us-east1")  OR 
-    (resource.type = "cloud_run_revision"
-    resource.labels.service_name = "data-writer"
-    resource.labels.location = "us-east1")  OR 
-    (resource.type = "cloud_run_revision"
-    resource.labels.service_name = "data-deleter"
-    resource.labels.location = "us-east1")  OR 
-    (resource.type = "cloud_run_revision"
-    resource.labels.service_name = "web-ui"
-    resource.labels.location = "us-east1")
-    severity>=DEFAULT
-    ```
+  ```
+  (resource.type = "cloud_run_revision"
+  resource.labels.service_name = "extract-text"
+  resource.labels.location = "us-east1") OR 
+  (resource.type = "cloud_run_revision"
+  resource.labels.service_name = "extract-syntax"
+  resource.labels.location = "us-east1") OR 
+  (resource.type = "cloud_run_revision"
+  resource.labels.service_name = "extract-sentiment"
+  resource.labels.location = "us-east1")  OR 
+  (resource.type = "cloud_run_revision"
+  resource.labels.service_name = "data-writer"
+  resource.labels.location = "us-east1")  OR 
+  (resource.type = "cloud_run_revision"
+  resource.labels.service_name = "data-deleter"
+  resource.labels.location = "us-east1")  OR 
+  (resource.type = "cloud_run_revision"
+  resource.labels.service_name = "web-ui"
+  resource.labels.location = "us-east1")
+  severity>=DEFAULT
+  ```
 
 ## Test with lots of data
 
 If you have reached this far, you have a fully working application but to confirm let's do an end-to-end test.
 
- * Run the following end-to-end test. This will upload a sample image and put it through the different stages of text extraction, syntax extraction, sentiment analysis and finally, delete the image. If you used a different GCS Bucket, update the GS_BUCKET variable in the code. If you are doing this in a demo, it is most likely to fail :-) 
+  * Run the following end-to-end test. This will upload a sample image and put it through the different stages of text extraction, syntax extraction, sentiment analysis and finally, delete the image. If you used a different GCS Bucket, update the GS_BUCKET variable in the code. If you are doing this in a demo, it is most likely to fail :-) 
   ```
   cd $CALVIN_REPO/tests
   python end-to-end-test.py 
@@ -512,18 +512,18 @@ If you have reached this far, you have a fully working application but to confir
   Data Deleter: Success
   ```
 
- * If the above works, time to make this work at scale. We have public bucket of Calvin and Hobbes images that we can test with. This will test against approx 100 images
+  * If the above works, time to make this work at scale. We have public bucket of Calvin and Hobbes images that we can test with. This will test against approx 100 images
   ```
   gsutil -q cp -c gs://calvin.tty0.me/calvin-9{1..9}{1..9}.png  gs://calvin-images/
   ```
 
- * Time to leave the boring console and code and go read some of the comics using the URL below
+  * Time to leave the boring console and code and go read some of the comics using the URL below
   ```
   uri=$(gcloud functions describe web-ui --project $PROJECT_ID  --region=us-east1  --format='value(serviceConfig.uri)')
   for s in "search=FLUSH" "search=Cookies" "sentiment=positive" "sentiment=negative"; do echo $uri/?$s; done 
   ```
 
- * If we need more images. This has 900+ images. You can test with all but your cost may go up a bit. 
+  * If we need more images. This has 900+ images. You can test with all but your cost may go up a bit. 
   ```
   gsutil -q cp -c gs://calvin.tty0.me/calvin-{6,7,8}{1..9}{1..9}.png  gs://calvin-images/
   ```
@@ -532,40 +532,39 @@ If you have reached this far, you have a fully working application but to confir
 
 Overall, running the above should not cost more than 5 to 10 USD per month. Google Cloud is very cost-effective when it comes to experimentation of this kind. The costs do go up when you scale. Here's some more information.
 
- * Cloud functions are free up to 2 million invocations. Beyond that it is 0.40 USD per million. More at [](https://cloud.google.com/functions/pricing)
+  * Cloud functions are free up to 2 million invocations. Beyond that it is 0.40 USD per million. More at [](https://cloud.google.com/functions/pricing)
 
- * Cloud storage is $0.020 per Gigabyte per month. More at [](https://cloud.google.com/storage/pricing)
+  * Cloud storage is $0.020 per Gigabyte per month. More at [](https://cloud.google.com/storage/pricing)
 
- * For Big Query, 1 TB of queries and 10GB of storage is free every month. Note, something Spanner or Cloud SQL will be a lot more in cost. 
+  * For Big Query, 1 TB of queries and 10GB of storage is free every month. Note, something Spanner or Cloud SQL will be a lot more in cost. 
  
- * For Cloud Logging, 50 GiB of logs ingestion is free and if you stick to default retention (30 days), they don't incur any cost.  Cost of ingestion beyond 50GB is 0.50/GiB 
+  * For Cloud Logging, 50 GiB of logs ingestion is free and if you stick to default retention (30 days), they don't incur any cost.  Cost of ingestion beyond 50GB is 0.50/GiB 
 
- * For DocumentAI, OCR on 1000 images will cost about 1.5 USD More at [](https://cloud.google.com/document-ai/pricing)
+  * For DocumentAI, OCR on 1000 images will cost about 1.5 USD More at [](https://cloud.google.com/document-ai/pricing)
 
- * For Cloud Natural Language, syntax & sentiment analysis is a bit more complex to asses. 5000 Units per month are free which equates to 5 million characters processed. We will be well within that tier for this example. 
-  * Beyond that, syntax analyis costs 0.5 USD per 1000 units & sentiment analysis costs 1 USD per 1000 units
-  * More at [](https://cloud.google.com/natural-language/pricing)
-
-* For Cloud Natural Language, sentiment analysis is a bit more complex to asses. 5000 Units per month are free which equates to 5 million characters processed. We will be well within that tier for this example. More at [](https://cloud.google.com/natural-language/pricing)
+  * For Cloud Natural Language, syntax & sentiment analysis is a bit more complex to asses. 5000 Units per month are free which equates to 5 million characters processed. We will be well within that tier for this example. 
+    * Beyond that, syntax analyis costs 0.5 USD per 1000 units & sentiment analysis costs 1 USD per 1000 units
+    * More at [](https://cloud.google.com/natural-language/pricing)
  
- * All said, it is always good to clean up after you are done playing.
+  * All said, it is always good to clean up after you are done playing.
+
   * Cleanup the functions
-    ```
-    gcloud functions delete web-ui --quiet --gen2 --region=us-east1 --project $PROJECT_ID
-    gcloud functions delete data-deleter --quiet --gen2  --region=us-east1 --project $PROJECT_ID
-    gcloud functions delete data-writer --quiet --gen2 --region=us-east1 --project $PROJECT_ID
-    gcloud functions delete extract-sentiment --quiet --gen2 --region=us-east1 --project $PROJECT_ID
-    gcloud functions delete extract-syntax --quiet --gen2 --region=us-east1 --project $PROJECT_ID
-    gcloud functions delete extract-text --quiet --gen2 --region=us-east1 --project $PROJECT_ID
-    ```
+  ```
+  gcloud functions delete web-ui --quiet --gen2 --region=us-east1 --project $PROJECT_ID
+  gcloud functions delete data-deleter --quiet --gen2  --region=us-east1 --project $PROJECT_ID
+  gcloud functions delete data-writer --quiet --gen2 --region=us-east1 --project $PROJECT_ID
+  gcloud functions delete extract-sentiment --quiet --gen2 --region=us-east1 --project $PROJECT_ID
+  gcloud functions delete extract-syntax --quiet --gen2 --region=us-east1 --project $PROJECT_ID
+  gcloud functions delete extract-text --quiet --gen2 --region=us-east1 --project $PROJECT_ID
+  ```
 
   * Delete the pub/sub topics and subscriptions
-    ```
-    gcloud pubsub subscriptions delete extracted-text --project $PROJECT_ID 
-    gcloud pubsub subscriptions delete data-writer --project $PROJECT_ID 
-    gcloud pubsub topics delete calvin-text-extract --project $PROJECT_ID 
-    gcloud pubsub topics delete calvin-data-writer --project $PROJECT_ID
-    ```
+  ```
+  gcloud pubsub subscriptions delete extracted-text --project $PROJECT_ID 
+  gcloud pubsub subscriptions delete data-writer --project $PROJECT_ID 
+  gcloud pubsub topics delete calvin-text-extract --project $PROJECT_ID 
+  gcloud pubsub topics delete calvin-data-writer --project $PROJECT_ID
+  ```
 
   * Cleanup the storage bucket
   ```
