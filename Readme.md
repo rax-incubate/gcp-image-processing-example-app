@@ -1,53 +1,53 @@
 # Summary
 
-This article/tutorial in an experiment with AI services on GCP using a sample application. We will be doing the following :-
+This article/tutorial is an experiment with AI services on GCP using a sample application. We will be doing the following:-
 
- - Extract Text from a large array of comic strips. We will focus on [Calvin and Hobbes](https://en.wikipedia.org/wiki/Calvin_and_Hobbes) for this example but this could be any comic strip you have some images for. 
+ - Extract text from a large set of comic strips. We will focus on [Calvin and Hobbes](https://en.wikipedia.org/wiki/Calvin_and_Hobbes) for this example, but this could be any comic strip collection of images. 
 
- - Analyse syntax of the extracted text. In case of syntax, we mean words and use the automated parts of speech extraction in GCP's natural language processing
+ - Analyse the syntax of the extracted text. In the case of syntax, we mean words and use the automated parts of speech extraction in GCP's natural language processing.
 
- - Analyse sentiment of the extracted text using GCP's natural language processing 
+ - Analyse the sentiment of the extracted text using GCP's natural language processing.
 
- - Build a basic but working web-interface to test and demo the working of these examples
+ - Build a basic but working web interface to test and demo the working of these examples.
 
  - Read the comics in the process. Why not? 
 
- - Other areas of interest which maybe developed in the future include:
-  - Extract entities in text
-  - Detect faces in the images
+ - Other areas of interest for the future include:
+  - Extract entities in text.
+  - Detect faces in the images.
 
-From a design standpoint, we are also imposing some self-imposed technological constraints to test the powers of the Google Cloud Serverless platforms.  The following are the design principles.
+From a design standpoint, we are also imposing some self-imposed technological constraints to test the powers of the Google Cloud Serverless platforms. The following are the design principles.
 
- - All code will be in implemented directly in Cloud Functions. We will use gen 2 which uses Cloud Run under the hood.  Technically, that means, we can package this code into containers and run it on Cloud Run as well. 
+ - All code will be implemented directly in Cloud Functions. We will use gen 2, which uses Cloud Run under the hood. Technically, that means we can package this code into containers and run it on Cloud Run. 
 
- - Keep the application architecture simple and use separate functions for modular tasks. This effectively introduces a micro-services like design. 
+ - Keep the application architecture simple and use separate functions for modular tasks. This effectively introduces a micro-services-like design. 
 
- - Use Pub/Sub as a message bus for the distributed and async processing 
+ - Use Pub/Sub as a message bus for the distributed and async processing.
 
- - Use cloud Functions to service any web-frontend. We will skip using a load balancer for simplicity. Cloud functions already has an GCP managed load balancer and unless you are using custom domains, you don't need a load balancer. It is easy to front this with a load balancer. 
+ - Use cloud Functions to service any web frontend. We will skip using a load balancer for simplicity. Cloud functions already have a GCP-managed load balancer, and unless you use custom domains, you don't need a load balancer. It is easy to front this with a load balancer. 
 
- - File storage will be Google Cloud Storage (GCS)
+ - File storage will be Google Cloud Storage (GCS).
 
- - Relational data storage will be done using Big Query. We could have used Cloud SQL or Cloud Spanner but they were discarded in order to reduce overall cost.  Big Query was by far the most cost-effective option. 
+ - Relational data storage will be done using Big Query. We could have used Cloud SQL or Cloud Spanner, but they were discarded to reduce overall cost. Big Query was by far the most cost-effective option. 
 
 Here's the visual of the design we will implement:
 
 ![](design.png)
 
-At an high level, 
-  * Image data arrives in a GCP bucket
-  * GCS Event processing is triggered to extract text from the image 
-  * Extracted text is sent to NLP for syntax processing in separate jobs
-  * Extracted text is sent to NLP for sentiment processing in separate jobs
-  * All processed information are stored in a database by a data-writer job
-  * A separate job handles delete events
-  * A very simple web based frontend shows the results and is used for demos
+At a high level, 
+  * Image data arrives in a GCP bucket.
+  * GCS Event processing is triggered to extract text from the image.
+  * Extracted text is sent to NLP for syntax processing in separate jobs.
+  * Extracted text is sent to NLP for sentiment processing in separate jobs.
+  * All processed information is stored in a database by a data-writer job.
+  * A separate job handles deletion events.
+  * A simple web-based frontend shows the results and is used for demos.
 
 # Implementation
 
 ## Pick/create a GCP project
 
-We assume this is done on an empty project without any specific restrictions. us-east1 is the region used but this could work in any region with those services. 
+We assume this is done on an empty project without any specific restrictions. us-east1 is the region used, but this could work in any region with those services. 
 
   * Authenticate to Google and make sure you have access to the Project. 
   
@@ -139,7 +139,7 @@ We assume this is done on an empty project without any specific restrictions. us
 
 ## Extract text from images
 
-This service uses Document AI to extract text from an image. A GCS event is triggered when an object is uploaded to a bucket and a Cloud function passes the image to Document AI for process. It then collects the extracted text and sends it to a pub/sub topic.
+This service uses Document AI to extract text from an image. A GCS event is triggered when an object is uploaded to a bucket, and a Cloud function passes the image to Document AI for processing. It then collects and sends the extracted text to a pub/sub topic.
 
 
   * Create a processor in Document AI. There is no glcoud equivalent for this. This can also be done in Python if needed. We are also assuming that the processor is in the US region. For this exercise, we recommend keeping this to US and the name of the processor the same as well. If you change this, you will have to change it in the code as well. 
@@ -239,7 +239,7 @@ This service uses Document AI to extract text from an image. A GCS event is trig
 
 ## Extract syntax
 
-Now, we move to the language elements. This service uses the NLP API to extract word tokens. The NLP syntax API extracts parts of speech and you can filter by the ones you want. For this example we are only extracting the following types: "NOUN", "ADJ", "VERB". This extracted syntax is then passed to a pub/sub topic for data entry.
+Now, we move to the language elements. This service uses the NLP API to extract word tokens. The NLP syntax API extracts parts of speech, and you can filter by the ones you want. For this example, we are only extracting the following types: "NOUN", "ADJ", "VERB". This extracted syntax is then passed to a pub/sub topic for data entry.
 
   * Update `env.yaml` with the right values. Leave DEBUGX to 1 for additional logging. View the env.yaml to make sure this formatted correctly.
     ```
@@ -282,7 +282,7 @@ Now, we move to the language elements. This service uses the NLP API to extract 
 
 ## Extract sentiment
 
-Similar to the syntax service, this service uses the NLP API to extract sentiment from the extracted text. The sentiment score and magnitude for all the text is then passed to a pub/sub topic for data entry. 
+Similar to the syntax service, this service uses the NLP API to extract sentiment from the extracted text. The sentiment score and magnitude for all the text are then passed to a pub/sub topic for data entry. 
 
   * Update `env.yaml` with the right values. Leave DEBUGX to 1 for additional logging. View the env.yaml to make sure this formatted correctly.
     ```
@@ -324,7 +324,7 @@ Similar to the syntax service, this service uses the NLP API to extract sentimen
   
 ## Data writer 
 
-This service does a simple job of taking values and writing it into Big Query. Think of this as the data service that can be replaced with something else. For example write to Cloud SQL or Spanner. You can also have multiple data-writers.
+This service does a simple job of taking values and writing them into Big Query. Think of this as the data service that can be replaced with something else. For example, write to Cloud SQL or Spanner. You can also have multiple data-writers.
 
   * Update `env.yaml` with the right values. Leave DEBUGX to 1 for additional logging. View the env.yaml to make sure this formatted correctly.
     ```
@@ -367,7 +367,7 @@ This service does a simple job of taking values and writing it into Big Query. T
 
 ## Process image delete eventa
 
-This service takes care of images that are deleted from the GCS bucket. Again this is built separately to allow for different process for deletion. In this example, we are just cleaning up the table but this could easily do other things like update some 3rd party system or rebuild a cache etc. 
+This service takes care of images that are deleted from the GCS bucket. Again this is built separately to allow for a different process for deletion. In this example, we are just cleaning up the table, but this could easily do other things like update some 3rd party system or rebuild a cache. 
 
   * Update `env.yaml` with the right values. Leave DEBUGX to 1 for additional logging. View the env.yaml to make sure this formatted correctly.
     ```
@@ -408,7 +408,7 @@ This service takes care of images that are deleted from the GCS bucket. Again th
     ```
 
 ## Web frontend
-This is a simple service that provides a web interface to demonstrate the working of the the whole application. This function does two things. It lists all the images in the database. It also allows searching using the keywords or sentiment type.  For this example, we have a standalone function but we could put a load balancer in front it and make this part of larger application or custom domain. 
+This is a simple service that provides a web interface to demonstrate the working of the whole application. This function does two things. It lists all the images in the database. It also allows searching using keywords or sentiment types. We have a standalone function for this example, but we could put a load balancer in front of it and make this part of a more extensive application or a custom domain. 
 
   * Update `env.yaml` with the right values. Leave DEBUGX to 1 for additional logging. View the env.yaml to make sure this formatted correctly.
     ```
@@ -448,9 +448,9 @@ This is a simple service that provides a web interface to demonstrate the workin
 
 ## Metrics and monitors
 
-One of the challenges of a micro-services architecture is to build observability into the application. When one of these many micro-services mis-behaves how do you find that out and how do you troubleshoot. There are two approaches we have taken
+One of the challenges of a micro-services architecture is to build observability into the application. When one of these many micro-services misbehaves, how do you find that out and how do you troubleshoot? There are two approaches we have taken
 
-  * Build custom dashboard just for this application. See cloud-monitoring-dashboard.json for metrics dashboard that can be imported. If you have stayed with the naming convention of the functions in this article, this should work without any changes.  Here's a screenshot:-
+  * Build a custom dashboard just for this application. See cloud-monitoring-dashboard.json for the metrics dashboard that can be imported. If you have stayed with the naming convention of the functions in this article, this should work without any changes.  Here's a screenshot:-
 
 ![](monitoring/sample-monitoring-dashboard.png)
 
@@ -465,7 +465,7 @@ One of the challenges of a micro-services architecture is to build observability
 
     * Go to the [web console](https://console.cloud.google.com/monitoring/dashboards) and view your dashboard
 
-  * If you just want the logs, the code requires some instrumentation in the form of debug messages. Anything you print to the stdout, you can get in logs. You can also incorporate things like open telemetry into this. For the sake of simplicity we have stayed with simple print statements to capture key stages of the code execution. Cloud Logging does the rest and you can query logs using this. 
+  * If you want the logs, the code requires some instrumentation in the form of debug messages. Anything you print to the stdout, you can get in logs. You can also incorporate things like open telemetry into this. For simplicity, we have stayed with simple print statements to capture key stages of the code execution. Cloud Logging does the rest, and you can query logs using this. 
     ```
     (resource.type = "cloud_run_revision"
     resource.labels.service_name = "extract-text"
@@ -492,7 +492,7 @@ One of the challenges of a micro-services architecture is to build observability
 
 If you have reached this far, you have a fully working application but to confirm let's do an end-to-end test.
 
- * Run the following end-to-end test. This will upload a sample image and put it through the different stages of text extraction, syntax extraction, sentiment analysis and finally delete the image. If you are using a different GCS Bucket, update the GS_BUCKET variabel in the code. If you are doing this in a demo, it is most likely to fail :-) 
+ * Run the following end-to-end test. This will upload a sample image and put it through the different stages of text extraction, syntax extraction, sentiment analysis and finally, delete the image. If you used a different GCS Bucket, update the GS_BUCKET variable in the code. If you are doing this in a demo, it is most likely to fail :-) 
   ```
   cd $CALVIN_REPO/tests
   python end-to-end-test.py 
@@ -596,7 +596,7 @@ Overall, running the above should not cost more than 5 to 10 USD per month. Goog
 
  * GCP services are great to experiment with. There are lots of online examples to get you started.
 
- * When using Functions, you have to think through how you will opertionalize the setup for scale. For example, the use of environment variables to trigger debug logging or creating an execution ID that allows you to track end-to-end is very useful.  Having a logging strategy is important and you also have to decide log retention etc.
+ * When using Functions, you must consider how you will operationalise the setup for scale. For example, using environment variables to trigger debug logging or creating an execution ID that allows you to track end-to-end is very useful. A logging strategy is essential, and you must decide log retention etc.
 
  * Start simple and then pile on. It is amazing what momentum brings when you have little wins.  
 
