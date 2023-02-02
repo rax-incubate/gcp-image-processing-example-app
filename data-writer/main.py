@@ -67,6 +67,33 @@ def write_data(msg_content, eid):
         sql.append("CURRENT_DATETIME()")
         sql.append(")")
 
+    if "entity_data" in json_data:
+        sql = list()
+        sql.append("INSERT INTO " + bq_dataset_id + "." + bq_table_id)
+        sql.append("(bucket, filename, entities,last_update)")
+        sql.append("VALUES (")
+        sql.append("'" + json_data['bucket'] + "', ")
+        sql.append("'" + json_data['file_name'] + "', ")
+        sql.append("[")
+
+        entities = json_data['entity_data']
+        if debugx:
+            print(f"DEBUGX:{eid}:entities:{entities}")
+        first_ent = True
+        for ent in entities:
+            if debugx:
+                print(f"DEBUGX:{eid}:ent:{ent}")
+
+            if ent['entity_type'] != 'NUMBER' and ent['entity_score'] != '0.0':
+                if not first_ent:
+                    sql.append(",")
+                sql.append("('" + ent['entity_name'].replace("'", "") + "', ")
+                sql.append("'" + ent['entity_type'] + "', ")
+                sql.append("CAST(" + str(ent['entity_score']) + " AS NUMERIC))")
+                first_ent = False
+        sql.append('], CURRENT_DATETIME()')
+        sql.append(')')
+
     query = "".join(sql)
 
     if debugx:
