@@ -40,11 +40,38 @@ def new_request(request):
     if debugx:
         print(f"DEBUGX:" + eid + ":sentiment:" + str(sentiment or ''))
 
+    if request_json and 'entity_name' in request_json:
+        entity_name = request_json['entity_name']
+    elif request_args and 'entity_name' in request_args:
+        entity_name = request_args['entity_name']
+    else:
+        entity_name = None
+
+    if debugx:
+        print(f"DEBUGX:" + eid + ":entity_name:" + str(entity_name or ''))
+
+    if request_json and 'entity_type' in request_json:
+        entity_type = request_json['entity_type']
+    elif request_args and 'entity_type' in request_args:
+        entity_type = request_args['entity_type']
+    else:
+        entity_type = None
+
+    if debugx:
+        print(f"DEBUGX:" + eid + ":entity_type:" + str(entity_type or ''))
+
+
     client = bigquery.Client()
     query = "SELECT DISTINCT filename, bucket FROM " + bq_dataset_id + "." + bq_table_id + " LIMIT 100"
 
     if search is not None:
         query = "SELECT DISTINCT filename, bucket FROM " + bq_dataset_id + "." + bq_table_id + " WHERE REGEXP_CONTAINS(syntax_text,r'(?i){}') LIMIT 20".format(search)
+
+    if entity_name is not None:
+        query = "SELECT DISTINCT filename, bucket FROM " + bq_dataset_id + "." + bq_table_id + ", UNNEST(entities) e WHERE REGEXP_CONTAINS(e.name ,r'(?i){}') LIMIT 20".format(entity_name)
+
+    if entity_type is not None:
+        query = "SELECT DISTINCT filename, bucket FROM " + bq_dataset_id + "." + bq_table_id + ", UNNEST(entities) e WHERE REGEXP_CONTAINS(e.type ,r'(?i){}') LIMIT 20".format(entity_type)
 
     if sentiment == "positive":
         query = "SELECT DISTINCT filename, bucket FROM " + bq_dataset_id + "." + bq_table_id + " WHERE sentiment_score >= 0.1 AND sentiment_magnitude >= 2.0 LIMIT 100"
