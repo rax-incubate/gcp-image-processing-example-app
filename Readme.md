@@ -8,13 +8,15 @@ This article/tutorial is an experiment with AI services on GCP using a sample ap
 
  - Analyse the sentiment of the extracted text using GCP's natural language processing.
 
+ - Analyse the entities in the extracted text using GCP's natural language processing.
+
  - Build a basic but working web interface to test and demo the working of these examples.
 
  - Read the comics in the process. Why not? 
 
- - Other areas of interest for the future include:
-  - Extract entities in text.
-  - Detect faces in the images.
+ - Other areas of interest where
+  - Detect faces in the images - Something to be considered. Although the dataset we have won't have that many faces it would be interesting to see how the vision API handles comic strips. 
+  - Content classification - This is not very useful in this case as tthe text we extract is enough for the use-case and the category is largely the same. We did try this and most were "/Arts & Entertainment/Humor/Other" or "/Arts & Entertainment/Comics & Animation/Comics"
 
 From a design standpoint, we are also imposing some self-imposed technological constraints to test the powers of the Google Cloud Serverless platforms. The following are the design principles.
 
@@ -37,8 +39,9 @@ Here's the visual of the design we will implement:
 At a high level, 
   * Image data arrives in a GCP bucket.
   * GCS Event processing is triggered to extract text from the image.
-  * Extracted text is sent to NLP for syntax processing in separate jobs.
-  * Extracted text is sent to NLP for sentiment processing in separate jobs.
+  * Extracted text is sent to NLP for syntax processing in a separate job.
+  * Extracted text is sent to NLP for sentiment processing in a separate job.
+  * Extracted text is sent to NLP for entity processing in a separate job.
   * All processed information is stored in a database by a data-writer job.
   * A separate job handles deletion events.
   * A simple web-based frontend shows the results and is used for demos.
@@ -58,7 +61,7 @@ We assume this is done on an empty project without any specific restrictions. us
 
   * Enable the APIs we need
   ```
-  for gcp_service in "documentai.googleapis.com" "cloudfunctions.googleapis.com" "cloudbuild.googleapis.com" "artifactregistry.googleapis.com" "eventarc.googleapis.com" "run.googleapis.com" "language.googleapis.com"; do  gcloud services enable $gcp_service; done
+  for gcp_service in "documentai.googleapis.com" "cloudfunctions.googleapis.com" "cloudbuild.googleapis.com" "artifactregistry.googleapis.com" "eventarc.googleapis.com" "run.googleapis.com" "language.googleapis.com" "vision.googleapis.com"; do  gcloud services enable $gcp_service; done
   ```
 
   * Get a beverage and read this article. Some of these APIs can take up to 5 minutes to enable. Best to give them some time to activate.
@@ -239,7 +242,7 @@ This service uses Document AI to extract text from an image. A GCS event is trig
 
 ## Extract syntax
 
-Now, we move to the language elements. This service uses the NLP API to extract word tokens. The NLP syntax API extracts parts of speech, and you can filter by the ones you want. For this example, we are only extracting the following types: "NOUN", "ADJ", "VERB". This extracted syntax is then passed to a pub/sub topic for data entry.
+Now, we move to the language elements. This service uses the NLP API to extract word tokens. The NLP syntax API extracts parts of speech, and you can filter by the ones you want. For this example, we are only extracting the following types: "NOUN", "ADJ", "VERB". This extracted syntax is then passed to a pub/sub topic for data recording.
 
   * Update `env.yaml` with the right values. Leave DEBUGX to 1 for additional logging. View the env.yaml to make sure this formatted correctly.
     ```
@@ -282,7 +285,7 @@ Now, we move to the language elements. This service uses the NLP API to extract 
 
 ## Extract sentiment
 
-Similar to the syntax service, this service uses the NLP API to extract sentiment from the extracted text. The sentiment score and magnitude for all the text are then passed to a pub/sub topic for data entry. 
+Similar to the syntax service, this service uses the NLP API to extract sentiment from the extracted text. The sentiment score and magnitude for all the text are then passed to a pub/sub topic for data recording. 
 
   * Update `env.yaml` with the right values. Leave DEBUGX to 1 for additional logging. View the env.yaml to make sure this formatted correctly.
     ```
@@ -321,7 +324,48 @@ Similar to the syntax service, this service uses the NLP API to extract sentimen
      --region=us-east1 \
      --project $PROJECT_ID
     ```
-  
+## Extract entities
+
+Similar to the syntax service, this service uses the NLP API to extract entities from the extracted text. Entities are similar to syntax but instead of the entire parts of speech, this extracts specific entities like proper nouns, location and similar. The entity type, salience score and the metadata for entities for all text is then passed to a pub/sub topic for data recording. 
+
+  * Update `env.yaml` with the right values. Leave DEBUGX to 1 for additional logging. View the env.yaml to make sure this formatted correctly.
+    ```
+    cd $CALVIN_REPO/extract-sentiment
+    echo -e "PROJECT_ID: \"$PROJECT_ID\"\nPROJECT_NO: \"$PROJECT_NUMBER\"\nTOPIC_ID: \"calvin-data-writer\"\nDEBUGX: \"1\"" > env.yaml
+    cat env.yaml
+    ```
+      * Sample env.yaml
+      ```
+      PROJECT_ID: "calvin-h314"
+      PROJECT_NO: "476719929030"
+      TOPIC_ID: "calvin-data-writer"
+      DEBUGX: "1"
+      ```
+
+  * Deploy the extract-entities function. 
+    ```
+    cd $CLONE_FOLDER/extract-entities
+    gcloud functions deploy extract-entities \
+     --gen2 \
+     --runtime=python310 \
+     --region=us-east1 \
+     --source=. \
+     --entry-point=new_text \
+     --trigger-topic=calvin-text-extract \
+     --env-vars-file env.yaml \
+     --retry \
+     --project $PROJECT_ID
+    ```
+
+  * Review logs for function deployment. If there any errors, they will show up. We will do end to end tests later. 
+    ```
+    gcloud beta functions logs read extract-entities \
+     --gen2 \
+     --limit=100 \
+     --region=us-east1 \
+     --project $PROJECT_ID
+    ```
+
 ## Data writer 
 
 This service does a simple job of taking values and writing them into Big Query. Think of this as the data service that can be replaced with something else. For example, write to Cloud SQL or Spanner. You can also have multiple data-writers.
@@ -517,10 +561,10 @@ If you have reached this far, you have a fully working application but to confir
   gsutil -q cp -c gs://calvin.tty0.me/calvin-9{1..9}{1..9}.png  gs://calvin-images/
   ```
 
-  * Time to leave the boring console and code and go read some of the comics using the URL below
+  * Time to leave the boring console and code to go read some of the comics using the different URLs below. You can experiment with other searches.  
   ```
   uri=$(gcloud functions describe web-ui --project $PROJECT_ID  --region=us-east1  --format='value(serviceConfig.uri)')
-  for s in "search=FLUSH" "search=Cookies" "sentiment=positive" "sentiment=negative"; do echo $uri/?$s; done 
+  for s in "search=FLUSH" "search=Cookies" "sentiment=positive" "sentiment=negative" "entity_name=swimming" "entity_name=dynamite" "entity_type=location"; do echo $uri/?$s; done 
   ```
 
   * If we need more images. This has 900+ images. You can test with all but your cost may go up a bit. 
