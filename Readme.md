@@ -653,9 +653,9 @@ We suggest the following :-
    
    * [Plant Image Analysis](https://www.quantitative-plant.org/dataset): This is a compilation of over 1 million images of plants, with the choice of roughly 11 species of plants. 
    
-   * [Celebfaces](http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html)]: This image dataset features over 200,000 images of celebrities.
+   * [Celebfaces](http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html): This image dataset features over 200,000 images of celebrities.
    
-   * [Google’s Open Images](https://ai.googleblog.com/2016/09/introducing-open-images-dataset.html): One of the largest of the image datasets 
+   * [Google’s Open Images](https://ai.googleblog.com/2016/09/introducing-open-images-dataset.html): One of the largest of the image datasets consisting of ~9 million URLs to images that have been annotated with labels spanning over 6000 categories and the images are listed as having a Creative Commons Attribution.
 
    * You might have your own. Maybe your photo collection.
 
