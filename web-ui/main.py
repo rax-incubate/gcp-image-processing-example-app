@@ -60,12 +60,25 @@ def new_request(request):
     if debugx:
         print(f"DEBUGX:" + eid + ":entity_type:" + str(entity_type or ''))
 
+    if request_json and 'face_desc' in request_json:
+        face_desc = request_json['face_desc']
+    elif request_args and 'face_desc' in request_args:
+        face_desc = request_args['face_desc']
+    else:
+        face_desc = None
+
+    if debugx:
+        print(f"DEBUGX:" + eid + ":entity_type:" + str(entity_type or ''))
+
 
     client = bigquery.Client()
     query = "SELECT DISTINCT filename, bucket FROM " + bq_dataset_id + "." + bq_table_id + " LIMIT 100"
 
     if search is not None:
         query = "SELECT DISTINCT filename, bucket FROM " + bq_dataset_id + "." + bq_table_id + " WHERE REGEXP_CONTAINS(syntax_text,r'(?i){}') LIMIT 20".format(search)
+
+    if face_desc is not None:
+        query = "SELECT DISTINCT filename, bucket FROM " + bq_dataset_id + "." + bq_table_id + ", UNNEST(face_labels) f WHERE REGEXP_CONTAINS(f.description ,r'(?i){}') LIMIT 20".format(face_desc)
 
     if entity_name is not None:
         query = "SELECT DISTINCT filename, bucket FROM " + bq_dataset_id + "." + bq_table_id + ", UNNEST(entities) e WHERE REGEXP_CONTAINS(e.name ,r'(?i){}') LIMIT 20".format(entity_name)
