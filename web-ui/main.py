@@ -114,12 +114,12 @@ def new_request(request):
     html.append("<a href={}?sentiment=neutral>neutral</a> | ".format(request.base_url))
     html.append("<br>")
 
-    ent_type_filter_query = "SELECT  DISTINCT e.type FROM " + bq_dataset_id + "." + bq_table_id + " , UNNEST(entities) e WHERE e.type != 'OTHER' LIMIT 10"
+    ent_type_filter_query = "SELECT e.type,count(e.type) as e_cnt FROM " + bq_dataset_id + "." + bq_table_id + " , UNNEST(entities) e WHERE e.type != 'OTHER' GROUP by e.type ORDER by e_cnt DESC LIMIT 10"
     if debugx:
         print(f"DEBUGX:" + eid + ":Entity type filter query:" + ent_type_filter_query)
     ent_type_filter_query_job = client.query(ent_type_filter_query)  
     ent_type_filter_query_rows = ent_type_filter_query_job.result()
-    html.append("Entity type:")
+    html.append("Entity type (top 10):")
     for ent_type_filter_query_row in ent_type_filter_query_rows:
         html.append("<a href={}?entity_type={}>{}</a> | ".format(request.base_url, ent_type_filter_query_row["type"], ent_type_filter_query_row["type"]))
     html.append("<br>")
@@ -129,10 +129,22 @@ def new_request(request):
         print(f"DEBUGX:" + eid + ":Entity name filter query:" + ent_name_filter_query)
     ent_name_filter_query_job = client.query(ent_name_filter_query)  
     ent_name_filter_query_rows = ent_name_filter_query_job.result()
-    html.append("Entity name:")
+    html.append("Entity name (top 10):")
     for ent_name_filter_query_row in ent_name_filter_query_rows:
         html.append("<a href={}?entity_name={}>{}</a> | ".format(request.base_url, ent_name_filter_query_row["name"], ent_name_filter_query_row["name"]))
     html.append("<br>")
+
+    face_label_filter_query = "SELECT f.description,count(f.description) as f_cnt FROM " + bq_dataset_id + "." + bq_table_id + " , UNNEST(face_labels) f GROUP by f.description ORDER by f_cnt DESC LIMIT 10"
+    if debugx:
+        print(f"DEBUGX:" + eid + ":Face label filter query:" + face_label_filter_query)
+    face_label_filter_query_job = client.query(face_label_filter_query)  
+    face_label_filter_query_rows = face_label_filter_query_job.result()
+    html.append("Face labels (Top 10):")
+    for face_label_filter_query_row in face_label_filter_query_rows:
+        html.append("<a href={}?face_desc={}>{}</a> | ".format(request.base_url, face_label_filter_query_row["description"], face_label_filter_query_row["description"]))
+    html.append("<br>")
+
+
 
     html.append("""
 <table border="1">
