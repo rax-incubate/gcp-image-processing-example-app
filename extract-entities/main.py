@@ -57,7 +57,7 @@ def extract_entities(msg_content, eid):
 
     publish_text(json_data['bucket'], json_data['file_name'], entity_data_arr, eid)
 
-# Publish the extracted words to pub sub
+# Publish the entity data to pub sub
 def publish_text(bucket_name: str, file_name: str, entity_data_arr, eid):
     debugx = False
     if os.environ.get('DEBUGX') == "1":
