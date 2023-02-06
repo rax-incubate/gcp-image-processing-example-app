@@ -38,6 +38,7 @@ def write_data(msg_content, eid):
 
     json_data = json.loads(msg_content)
 
+    sql = list()
     if "syntax_data" in json_data:
         sql = list()
         sql.append("INSERT INTO " + bq_dataset_id + "." + bq_table_id)
@@ -94,12 +95,43 @@ def write_data(msg_content, eid):
         sql.append('], CURRENT_DATETIME()')
         sql.append(')')
 
+    if "face_label_data" in json_data:
+        sql = list()
+        sql.append("INSERT INTO " + bq_dataset_id + "." + bq_table_id)
+        sql.append("(bucket, filename, face_labels,last_update)")
+        sql.append("VALUES (")
+        sql.append("'" + json_data['bucket'] + "', ")
+        sql.append("'" + json_data['file_name'] + "', ")
+        sql.append("[")
+
+        face_labels = json_data['face_label_data']
+        if debugx:
+            print(f"DEBUGX:{eid}:face_labels:{face_labels}")
+        first_face = True
+        for face in face_labels:
+            if debugx:
+                print(f"DEBUGX:{eid}:face:{face}")
+
+            if not first_face:
+                sql.append(",")
+            sql.append("('" + face['description'].replace("'", "") + "', ")
+            sql.append("CAST(" + str(face['score']) + " AS NUMERIC), ")
+            sql.append("CAST(" + str(face['topicality']) + " AS NUMERIC))")
+            first_face = False
+        sql.append('], CURRENT_DATETIME()')
+        sql.append(')')
+    
     query = "".join(sql)
 
     if debugx:
         print(f"DEBUGX:" + eid + ":" + "Query:" + query)
 
-    query_job = client.query(query)
+    if query:
+        query_job = client.query(query)
 
-    if query_job.errors:
-        print("CRITICAL: Error in executing query")
+        if query_job.errors:
+            print(f"DEBUGX:" + eid + ":" + "Error in executing query:")
+    else:
+        print(f"DEBUGX:" + eid + ":" + "Empty Query")
+
+
