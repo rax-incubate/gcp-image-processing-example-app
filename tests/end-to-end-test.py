@@ -15,6 +15,7 @@ if shutil.which("gsutil") is None or shutil.which("gcloud") is None or shutil.wh
     print("gsuti, gcloud and curl are required")
     sys.exit(1)
 
+complete_success = True 
 
 filename = "sample" + str(uuid.uuid4().hex) + ".png"
 cmd = "gsutil -q cp -c test.png " + GS_BUCKET  + filename
@@ -28,11 +29,12 @@ if p_status == 0:
     print(f"{msg}: Success")
 else:
     print(f"{msg}: Fail")
+    complete_success = False 
+
 
 
 print("Checking event in Text extract service...")
 cmd = "gcloud beta functions logs read extract-text --gen2 --region=us-east1 --project $PROJECT_ID | grep '" + filename + "'"
-
 retry_count = 0
 p_status = 1
 while retry_count < 3 and p_status == 1:
@@ -49,6 +51,7 @@ while retry_count < 3 and p_status == 1:
     retry_count = retry_count + 1
 if p_status != 0:
     print(f"{msg}: Fail")
+    complete_success = False 
 
 print("Checking Text extraction...")
 cmd = 'gcloud beta functions logs read extract-text --gen2 --region=us-east1 --project $PROJECT_ID | grep ' + "'" + 'Data sent:{"bucket": "calvin-images", "file_name": "' + filename + '", "extracted_text": "GOING TO THE\nBATHROOM.\nFLUSH' + "'"
@@ -68,6 +71,30 @@ while retry_count < 3 and p_status == 1:
     retry_count = retry_count + 1
 if p_status != 0:
     print(f"{msg}: Fail")
+    complete_success = False 
+
+
+print("Checking Face detection service...")
+cmd = "gcloud beta functions logs read detect-faces --gen2 --region=us-east1 --project $PROJECT_ID | grep '" + filename + "' | grep 'Mammal'"
+retry_count = 0
+p_status = 1
+while retry_count < 3 and p_status == 1:
+    print("Waiting 2 seconds...")
+    time.sleep(2)
+    if debugx:
+        print(cmd)
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+    (output, err) = p.communicate()
+    p_status = p.wait()
+    msg = "Face detection service"
+    if p_status == 0:
+        print(f"{msg}: Success")
+    retry_count = retry_count + 1
+if p_status != 0:
+    print(f"{msg}: Fail")
+    complete_success = False 
+
+
 
 print("Checking Text Syntax extraction...")
 cmd = 'gcloud beta functions logs read extract-syntax --gen2 --region=us-east1 --project $PROJECT_ID | grep ' + "'" + 'Data sent:{"bucket": "calvin-images", "file_name": "' + filename + '", "syntax_data":' + "'" + '| grep ' + "'GOING BATHROOM FLUSH'"
@@ -87,6 +114,7 @@ while retry_count < 3 and p_status == 1:
     retry_count = retry_count + 1
 if p_status != 0:
     print(f"{msg}: Fail")
+    complete_success = False 
 
 
 print("Checking Text Sentiment extraction...")
@@ -107,6 +135,7 @@ while retry_count < 3 and p_status == 1:
     retry_count = retry_count + 1
 if p_status != 0:
     print(f"{msg}: Fail")
+    complete_success = False 
 
 print("Checking Text Entity extraction...")
 cmd = 'gcloud beta functions logs read extract-entities --gen2 --region=us-east1 --project $PROJECT_ID | grep ' + "'" + 'Data sent:{"bucket": "calvin-images", "file_name": "' + filename + '", "entity_data": \[{"entity_name": "CALVIN", "entity_type": "PERSON", "entity_score": 0.5809273719787598}' + "'"
@@ -126,6 +155,7 @@ while retry_count < 3 and p_status == 1:
     retry_count = retry_count + 1
 if p_status != 0:
     print(f"{msg}: Fail")
+    complete_success = False 
 
 cmd = "gcloud functions describe web-ui --project $PROJECT_ID  --region=us-east1  --format='value(serviceConfig.uri)'"
 if debugx:
@@ -134,6 +164,25 @@ p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
 (output, err) = p.communicate()
 url = output.decode().replace('\n','') + "?search=BATHROOM FLUSH"
 
+print("Checking Data writer...")
+cmd = 'gcloud beta functions logs read data-writer --gen2 --region=us-east1 --project $PROJECT_ID | grep ' + "'" + filename + "' | grep 'Data entry succeeded'" 
+retry_count = 0
+p_status = 1
+while retry_count < 4 and p_status == 1:
+    print("Waiting 2 seconds...")
+    time.sleep(2)
+    if debugx:
+        print(cmd)
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+    (output, err) = p.communicate()
+    p_status = p.wait()
+    msg = "Data Writer"
+    if p_status == 0:
+        print(f"{msg}: Success")
+    retry_count = retry_count + 1
+if p_status != 0:
+    print(f"{msg}: Fail")
+    complete_success = False 
 
 print("Checking Web search...")
 cmd = "gcloud functions describe web-ui --project $PROJECT_ID  --region=us-east1  --format='value(serviceConfig.uri)'"
@@ -153,6 +202,7 @@ while retry_count < 3 and p_status == 1:
     retry_count = retry_count + 1
 if p_status != 0:
     print(f"{msg}: Fail")
+    complete_success = False 
 
 
 cmd = f"gsutil -q rm {GS_BUCKET}{filename}"
@@ -166,9 +216,10 @@ if p_status == 0:
     print(f"{msg}: Success")
 else:
     print(f"{msg}: Fail")
+    complete_success = False 
 
 print("Checking Data Deleter...")
-cmd = 'gcloud beta functions logs read data-deleter --gen2 --region=us-east1 --project $PROJECT_ID | grep "' + "DELETE FROM calvin.calvin_text WHERE bucket='calvin-images' AND filename='" + filename + "'" + '"'
+cmd = 'gcloud beta functions logs read data-deleter --gen2 --region=us-east1 --project $PROJECT_ID | grep ' + "'" + filename + "' | grep 'Data entry succeeded'" 
 retry_count = 0
 p_status = 1
 while retry_count < 4 and p_status == 1:
@@ -185,3 +236,13 @@ while retry_count < 4 and p_status == 1:
     retry_count = retry_count + 1
 if p_status != 0:
     print(f"{msg}: Fail")
+    complete_success = False 
+
+
+if complete_success:
+    print ("All Tests Passed")
+    sys.exit(0)
+else:
+    print ("All Tests Failed")
+    sys.exit(1)
+
