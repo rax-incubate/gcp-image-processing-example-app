@@ -1,0 +1,5 @@
+google.cloud
+google.cloud.vision
+google.cloud.pubsub
+google.api_core
+functions-framework==3.2.0
