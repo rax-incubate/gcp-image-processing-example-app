@@ -10,13 +10,16 @@ This article/tutorial is an experiment with AI services on GCP using a sample ap
 
  - Analyse the entities in the extracted text using GCP's natural language processing.
 
+ - Detect face labels in the image using GCP's Vision API
+ 
  - Build a basic but working web interface to test and demo the working of these examples.
 
  - Read the comics in the process. Why not? 
 
  - Other areas of interest where
-  - Detect faces in the images - Something to be considered. Although the dataset we have won't have that many faces it would be interesting to see how the vision API handles comic strips. 
   - Content classification - This is not very useful in this case as tthe text we extract is enough for the use-case and the category is largely the same. We did try this and most were "/Arts & Entertainment/Humor/Other" or "/Arts & Entertainment/Comics & Animation/Comics"
+  - Identify faces - The vision API can do this but it is somethign we could try later.
+
 
 From a design standpoint, we are also imposing some self-imposed technological constraints to test the powers of the Google Cloud Serverless platforms. The following are the design principles.
 
@@ -38,14 +41,15 @@ Here's the visual of the design we will implement:
 
 At a high level, 
   * Image data arrives in a GCP bucket.
+  * GCS Event processing is triggered to detect face labels from the image.
   * GCS Event processing is triggered to extract text from the image.
   * Extracted text is sent to NLP for syntax processing in a separate job.
   * Extracted text is sent to NLP for sentiment processing in a separate job.
   * Extracted text is sent to NLP for entity processing in a separate job.
   * All processed information is stored in a database by a data-writer job.
   * A separate job handles deletion events.
-  * A simple web-based frontend shows the results and is used for demos.
-
+  * A simple web-based frontend for demo that shows the results and allows basic filtering 
+  
 # Implementation
 
 ## Pick/create a GCP project
@@ -676,7 +680,7 @@ Overall, running the above should not cost more than 5 to 10 USD per month. Goog
 
  * When using Functions, you must consider how you will operationalise the setup for scale. For example, using environment variables to trigger debug logging or creating an execution ID that allows you to track end-to-end is very useful. A logging strategy is essential, and you must decide log retention etc.
 
- * Start simple and then pile on. It is amazing what momentum brings when you have little wins.  
+ * Start simple and then pile on. It is amazing what momentum brings when you have little wins.  Conversely, knowing when to stop is important as well.  There are lots of these cool APIs but not all will be revelant for your examples. 
 
 ## What next?
 
