@@ -357,9 +357,44 @@ Similar to the syntax service, this service uses the NLP API to extract entities
      --project $PROJECT_ID
     ```
 
+
+## Detect face data
+
+Similar to the syntax service, this service uses the NLP API to extract entities from the extracted text. Entities are similar to syntax but instead of the entire parts of speech, this extracts specific entities like proper nouns, location and similar. The entity type, salience score and the metadata for entities for all text is then passed to a pub/sub topic for data recording. 
+
+  * Update `env.yaml` with the right values. Leave DEBUGX to 1 for additional logging. View the env.yaml to make sure this formatted correctly.
+    ```
+    cd $CALVIN_REPO/detect-faces
+    echo -e "PROJECT_ID: \"$PROJECT_ID\"\nPROJECT_NO: \"$PROJECT_NUMBER\"\nTOPIC_ID: \"calvin-data-writer\"\nDEBUGX: \"1\"" > env.yaml
+    cat env.yaml
+    ```
+      * Sample env.yaml
+      ```
+      PROJECT_ID: "calvin-h314"
+      PROJECT_NO: "476719929030"
+      TOPIC_ID: "calvin-data-writer"
+      DEBUGX: "1"
+      ```
+
+  * Deploy the detect-faces function. 
+    ```
+    cd $CLONE_FOLDER/detect-faces
+    gcloud functions deploy detect-faces \
+     --gen2 \
+     --runtime=python310 \
+     --region=us-east1 \
+     --source=. \
+     --entry-point=new_image_file \
+     --trigger-event-filters="type=google.cloud.storage.object.v1.finalized" \
+     --trigger-event-filters="bucket=calvin-images"  \
+     --env-vars-file env.yaml \
+     --retry \
+     --project $PROJECT_ID
+    ```
+  
   * Review logs for function deployment. If there any errors, they will show up. We will do end to end tests later. 
     ```
-    gcloud beta functions logs read extract-entities \
+    gcloud beta functions logs read detect-faces \
      --gen2 \
      --limit=100 \
      --region=us-east1 \
@@ -567,7 +602,7 @@ If you have reached this far, you have a fully working application but to confir
   for s in "search=FLUSH" "search=Cookies" "sentiment=positive" "sentiment=negative" "entity_name=swimming" "entity_name=dynamite" "entity_type=location"; do echo $uri/?$s; done 
   ```
 
-  * If we need more images. This has 900+ images. You can test with all but your cost may go up a bit. 
+  * If we need more images. This has 900+ images. You can test with all but your cost may go up a bit.  Note, you might see some errors with concurrency here. BQ supports 100 concurrent INSERT statements and so anything above fails. This can be fixed using retries in code and exponetial back-off execution pattern or batching INSERTS.  This has not been implemented in this code.  The limit for DMLs like DELETE is 20 as well. 
   ```
   gsutil -q cp -c gs://calvin.tty0.me/calvin-{6,7,8}{1..9}{1..9}.png  gs://calvin-images/
   ```
