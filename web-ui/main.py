@@ -97,8 +97,6 @@ def new_request(request):
 
     if debugx:
         print(f"DEBUGX:" + eid + ":Query:" + query)
-    query_job = client.query(query) 
-    rows = query_job.result() 
 
     html =  list()
 
@@ -150,6 +148,8 @@ def new_request(request):
 <table border="1">
 <tbody>
 """)
+    query_job = client.query(query) 
+    rows = query_job.result() 
     if rows.total_rows == 0:
         html.append("<b>No results found.</b>")
     else:
