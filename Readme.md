@@ -33,7 +33,7 @@ From a design standpoint, we are also imposing some self-imposed technological c
 
  - File storage will be Google Cloud Storage (GCS).
 
- - Relational data storage will be done using Big Query. We could have used Cloud SQL or Cloud Spanner, but they were discarded to reduce overall cost. Big Query was by far the most cost-effective option. 
+ - Relational data storage will be done using Big Query. Cloud SQL or Cloud Spanner are better choices but they were discarded to reduce overall cost. Big Query was by far the most cost-effective option but it does have some limitations for this use-case. See [Big Query Quotas](https://cloud.google.com/bigquery/quotas) for specifics. This can be fixed using a feature which is still in preview stage called [query queues](https://cloud.google.com/bigquery/docs/query-queues)
 
 Here's the visual of the design we will implement:
 
@@ -597,7 +597,7 @@ If you have reached this far, you have a fully working application but to confir
 
   * If the above works, time to make this work at scale. We have public bucket of Calvin and Hobbes images that we can test with. This will test against approx 100 images
   ```
-  gsutil -q cp -c gs://calvin.tty0.me/calvin-9{1..9}{1..9}.png  gs://calvin-images/
+  gsutil -q cp -c gs://calvin.tty0.me/calvin-9{0..9}{0..9}.png  gs://calvin-images/
   ```
 
   * Time to leave the boring console and code to go read some of the comics using the different URLs below. You can experiment with other searches.  
@@ -608,7 +608,7 @@ If you have reached this far, you have a fully working application but to confir
 
   * If we need more images. This has 900+ images. You can test with all but your cost may go up a bit.  Note, you might see some errors with concurrency here. BQ supports 100 concurrent INSERT statements and so anything above fails. This can be fixed using retries in code and exponetial back-off execution pattern or batching INSERTS.  This has not been implemented in this code.  The limit for DMLs like DELETE is 20 as well. 
   ```
-  gsutil -q cp -c gs://calvin.tty0.me/calvin-{6,7,8}{1..9}{1..9}.png  gs://calvin-images/
+  gsutil -q cp -c gs://calvin.tty0.me/calvin-{6,7,8}{0..9}{0..9}.png  gs://calvin-images/
   ```
 
 ## Cost governance
@@ -674,13 +674,17 @@ Overall, running the above should not cost more than 5 to 10 USD per month. Goog
 
 ## Lessons Learnt
 
- * Cloud is fun. Not the same as Calvin and Hobbes but fun :-)
+ * Cloud AI is fun. Not the same as Calvin and Hobbes but fun :-)
+
+ * Start simple and then pile on. It is amazing what momentum brings when you have little wins.  Conversely, knowing when to stop is important as well.  There are lots of these cool APIs but not all will be revelant for your examples. 
 
  * GCP services are great to experiment with. There are lots of online examples to get you started.
 
- * When using Functions, you must consider how you will operationalise the setup for scale. For example, using environment variables to trigger debug logging or creating an execution ID that allows you to track end-to-end is very useful. A logging strategy is essential, and you must decide log retention etc.
-
- * Start simple and then pile on. It is amazing what momentum brings when you have little wins.  Conversely, knowing when to stop is important as well.  There are lots of these cool APIs but not all will be revelant for your examples. 
+ * When using Functions, you must consider how you will operationalise the setup for scale. For example, using environment variables to trigger debug logging or creating an execution ID that allows you to track end-to-end is very useful. 
+ 
+ * A logging strategy on how to use logs for troubleshooting is essential, and so i log retention for historical analysis. You could invest in [Opentelemtry](https://cloud.google.com/trace/docs/setup/python-ot)
+ 
+ * Some batching is required for this to scale and be more efficient. For example, INSERTS or DELETES to Big query will run into limits if you don't batch.  Cloud function execution will also be optimized if you batch.  It will require change in logic to where instead of a pub/sub trigger, these functions will have to poll the topic in either a window and only write when a threshold is reached.
 
 ## What next?
 
