@@ -243,6 +243,6 @@ if complete_success:
     print ("All Tests Passed")
     sys.exit(0)
 else:
-    print ("All Tests Failed")
+    print ("Some Tests Failed. Please see above")
     sys.exit(1)
 
