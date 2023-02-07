@@ -20,7 +20,6 @@ This article/tutorial is an experiment with AI services on GCP using a sample ap
   - Content classification - This is not very useful in this case as tthe text we extract is enough for the use-case and the category is largely the same. We did try this and most were "/Arts & Entertainment/Humor/Other" or "/Arts & Entertainment/Comics & Animation/Comics"
   - Identify faces - The vision API can do this but it is somethign we could try later.
 
-
 From a design standpoint, we are also imposing some self-imposed technological constraints to test the powers of the Google Cloud Serverless platforms. The following are the design principles.
 
  - All code will be implemented directly in Cloud Functions. We will use gen 2, which uses Cloud Run under the hood. Technically, that means we can package this code into containers and run it on Cloud Run. 
@@ -595,7 +594,7 @@ If you have reached this far, you have a fully working application but to confir
   Data Deleter: Success
   ```
 
-  * If the above works, time to make this work at scale. We have public bucket of Calvin and Hobbes images that we can test with. This will test against approx 100 images
+  * If the above works, time to make this work with 100 images.
   ```
   gsutil -q cp -c gs://calvin.tty0.me/calvin-9{0..9}{0..9}.png  gs://calvin-images/
   ```
@@ -606,7 +605,7 @@ If you have reached this far, you have a fully working application but to confir
   for s in "search=FLUSH" "search=Cookies" "sentiment=positive" "sentiment=negative" "entity_name=swimming" "entity_name=dynamite" "entity_type=location"; do echo $uri/?$s; done 
   ```
 
-  * If we need more images. This has 900+ images. You can test with all but your cost may go up a bit.  Note, you might see some errors with concurrency here. BQ supports 100 concurrent INSERT statements and so anything above fails. This can be fixed using retries in code and exponetial back-off execution pattern or batching INSERTS.  This has not been implemented in this code.  The limit for DMLs like DELETE is 20 as well. 
+  * If we need more images. This has 900+ images. You can test with all but your cost may go up a bit.  Note, you might see some errors with concurrency here. BQ supports 100 concurrent INSERT statements and so anything above will fail unless you queue them in code. The code does do some retries to avoid this but it won't work in all cases. The limit for DMLs like DELETE is 20 as well. 
   ```
   gsutil -q cp -c gs://calvin.tty0.me/calvin-{6,7,8}{0..9}{0..9}.png  gs://calvin-images/
   ```
