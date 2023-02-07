@@ -55,6 +55,7 @@ def delete_data(bucket, filename, eid):
         print(f"DEBUGX:" + eid + ":" + "Query:" + query)
 
     if query:
+        query_job = client.query(query)
         if query_job.errors:
             print(f"DEBUGX:" + eid + ":" + "Error in executing query:")
 
