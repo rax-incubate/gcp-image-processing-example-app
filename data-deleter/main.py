@@ -54,16 +54,30 @@ def delete_data(bucket, filename, eid):
     if debugx:
         print(f"DEBUGX:" + eid + ":" + "Query:" + query)
 
+
     if query:
-        query_job = client.query(query)
+
+        chk_jobs_qry = f"SELECT count(job_id) as job_cnt FROM `region-us`.INFORMATION_SCHEMA.JOBS_BY_PROJECT WHERE state != 'DONE' AND project_id = '{project_id}' AND REGEXP_CONTAINS(query, 'DELETE FROM calvin.calvin_text')"
+        chk_jobs_qry_job = client.query(chk_jobs_qry)
+        chk_jobs_rows = chk_jobs_qry_job.result() 
+        for chk_jobs_row in chk_jobs_rows:
+            pending_cnt = chk_jobs_row['job_cnt']
+
+        retries = 15
+        while pending_cnt >= 19 and retries > 0
+            print(f"DEBUGX:" + eid + ":" + " Queue has over " + str(pending_cnt) " querus, sleeping 2 seconds" )
+            time.sleep(2)
+            chk_jobs_qry_job = client.query(chk_jobs_qry)
+            chk_jobs_rows = chk_jobs_qry_job.result() 
+            for chk_jobs_row in chk_jobs_rows:
+                pending_cnt = chk_jobs_row['job_cnt']
+            retries = retries - 1
+
         if query_job.errors:
             print(f"DEBUGX:" + eid + ":" + "Error in executing query:")
 
-            retries = 10
             while retries > 0 and query_job.errors:
                 rand_sleep = (10/retries) + randrange(5)
-                print(f"DEBUGX:" + eid + ":" + "Sleeping " + str(rand_sleep) + " seconds and retrying query " + str(retries) )
-                time.sleep(rand_sleep)
                 query_job = client.query(query)
                 retries = retries - 1
         if query_job.errors:
@@ -73,3 +87,23 @@ def delete_data(bucket, filename, eid):
 
     else:
         print(f"DEBUGX:" + eid + ":" + "Empty Query")
+
+
+
+    #     if query_job.errors:
+    #         print(f"DEBUGX:" + eid + ":" + "Error in executing query:")
+
+    #         retries = 10
+    #         while retries > 0 and query_job.errors:
+    #             rand_sleep = (10/retries) + randrange(5)
+    #             print(f"DEBUGX:" + eid + ":" + "Sleeping " + str(rand_sleep) + " seconds and retrying query " + str(retries) )
+    #             time.sleep(rand_sleep)
+    #             query_job = client.query(query)
+    #             retries = retries - 1
+    #     if query_job.errors:
+    #         print(f"DEBUGX:{eid}:bucket={bucket},filename={filename},type={data_entry_type},Result=Max retries reached")
+    #     else:
+    #         print(f"DEBUGX:{eid}:bucket={bucket},filename={filename},type={data_entry_type},Result=Data entry succeeded")
+
+    # else:
+    #     print(f"DEBUGX:" + eid + ":" + "Empty Query")
