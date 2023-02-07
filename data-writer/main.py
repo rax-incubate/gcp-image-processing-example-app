@@ -2,9 +2,11 @@ import os
 import base64
 import json
 import uuid
+import time
 import functions_framework
 from google.api_core.client_options import ClientOptions
 from google.cloud import bigquery
+from random import randrange
 
 
 @functions_framework.cloud_event
@@ -39,8 +41,10 @@ def write_data(msg_content, eid):
     json_data = json.loads(msg_content)
 
     sql = list()
+    data_entry_type = ""
     if "syntax_data" in json_data:
         sql = list()
+        data_entry_type = "syntax"
         sql.append("INSERT INTO " + bq_dataset_id + "." + bq_table_id)
         sql.append("(bucket, filename, syntax_text,last_update)")
         sql.append("VALUES (")
@@ -52,6 +56,7 @@ def write_data(msg_content, eid):
 
     if "sentiment_score" in json_data and "sentiment_magnitude" in json_data:
         sql = list()
+        data_entry_type = "sentiment"
         sql.append("INSERT INTO " + bq_dataset_id + "." + bq_table_id)
         sql.append("(bucket, filename, sentiment_score, sentiment_magnitude, last_update)")
         sql.append("VALUES (")
@@ -70,6 +75,7 @@ def write_data(msg_content, eid):
 
     if "entity_data" in json_data:
         sql = list()
+        data_entry_type = "entity"
         sql.append("INSERT INTO " + bq_dataset_id + "." + bq_table_id)
         sql.append("(bucket, filename, entities,last_update)")
         sql.append("VALUES (")
@@ -97,6 +103,7 @@ def write_data(msg_content, eid):
 
     if "face_label_data" in json_data:
         sql = list()
+        data_entry_type = "face_labels"
         sql.append("INSERT INTO " + bq_dataset_id + "." + bq_table_id)
         sql.append("(bucket, filename, face_labels,last_update)")
         sql.append("VALUES (")
@@ -131,6 +138,18 @@ def write_data(msg_content, eid):
 
         if query_job.errors:
             print(f"DEBUGX:" + eid + ":" + "Error in executing query:")
+            retries = 10
+            while retries > 0 and query_job.errors:
+                rand_sleep = (10/retries) + randrange(5)
+                print(f"DEBUGX:" + eid + ":" + "Sleeping " + str(rand_sleep) + " seconds and retrying query " + str(retries) )
+                time.sleep(rand_sleep)
+                query_job = client.query(query)
+                retries = retries - 1
+        if query_job.errors:
+            print(f"DEBUGX:{eid}:bucket={json_data['bucket']},filename={json_data['file_name']},type={data_entry_type},Result=Max retries reached")
+        else:
+            print(f"DEBUGX:{eid}:bucket={json_data['bucket']},filename={json_data['file_name']},type={data_entry_type},Result=Data entry succeeded")
+
     else:
         print(f"DEBUGX:" + eid + ":" + "Empty Query")
 
