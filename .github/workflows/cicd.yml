@@ -1,0 +1,36 @@
+# We break these apart into separate files so that we can get badges for each one.
+
+name: cicd
+
+# Controls when the action will run. Triggers the workflow on push or pull request
+# events but only for the master branch
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Variables available to all jobs defined in this file
+env:
+  AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a job called "lint".
+  lint:
+    name: Linter
+
+    # The type of runner on which the job will run.
+    runs-on: [self-hosted, Linux]
+
+    # Steps represent a sequence of tasks that will be executed as part of the job.
+    steps:
+ 
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it.
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+

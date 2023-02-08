@@ -1,0 +1,18 @@
+
+
+name: Greetings
+
+on: [pull_request_target, issues]
+
+jobs:
+  greeting:
+    runs-on: [self-hosted, Linux]
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+    - uses: actions/first-interaction@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+        issue-message: "This is your first Issue filed, thanks for the feedback!"
+        pr-message: "This is your first Pull Request, thanks for contributing!"
