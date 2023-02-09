@@ -7,15 +7,21 @@ from google.api_core.client_options import ClientOptions
 from google.cloud import language_v1
 from google.cloud import pubsub_v1
 
+
 @functions_framework.cloud_event
 # receive new text events from pub sub
 def new_text(cloud_event):
-    eid = uuid.uuid4().hex
-
     debugx = False
     if os.environ.get('DEBUGX') == "1":
         debugx = True
+
     msg_content = base64.b64decode(cloud_event.data["message"]["data"]).decode()
+    json_data = json.loads(msg_content)
+
+    if "eid" in json_data:
+        eid = json_data['eid']
+    else:
+        eid = uuid.uuid4().hex
 
     if debugx:
         print(f"DEBUGX:" + eid + ":" + msg_content)
@@ -39,7 +45,6 @@ def extract_entities(msg_content, eid):
 
     language = "en"
     document = {"content": json_data['extracted_text'], "type_": type_, "language": language}
-
     encoding_type = language_v1.EncodingType.UTF8
 
     response = client.analyze_entities(
@@ -56,6 +61,7 @@ def extract_entities(msg_content, eid):
         entity_data_arr.append(entity_data)
 
     publish_text(json_data['bucket'], json_data['file_name'], entity_data_arr, eid)
+
 
 # Publish the entity data to pub sub
 def publish_text(bucket_name: str, file_name: str, entity_data_arr, eid):
@@ -75,6 +81,7 @@ def publish_text(bucket_name: str, file_name: str, entity_data_arr, eid):
     data['bucket'] = bucket_name
     data['file_name'] = file_name
     data['entity_data'] = entity_data_arr
+    data['eid'] = eid
 
     json_data = json.dumps(data)
     data = json_data.encode("utf-8")
