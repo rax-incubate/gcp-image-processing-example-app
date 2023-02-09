@@ -10,15 +10,22 @@ from random import randrange
 
 
 @functions_framework.cloud_event
-# receive new image events from GCS
+# receive new text events from pub sub
 def new_text(cloud_event):
-    eid = uuid.uuid4().hex
-
     debugx = False
     if os.environ.get('DEBUGX') == "1":
         debugx = True
 
     msg_content = base64.b64decode(cloud_event.data["message"]["data"]).decode()
+    json_data = json.loads(msg_content)
+
+    if "eid" in json_data:
+        eid = json_data['eid']
+    else:
+        eid = uuid.uuid4().hex
+
+    if debugx:
+        print(f"DEBUGX:" + eid + ":" + msg_content)
 
     write_data(msg_content, eid)
 
@@ -127,7 +134,6 @@ def write_data(msg_content, eid):
             first_face = False
         sql.append('], CURRENT_DATETIME()')
         sql.append(')')
-    
     query = "".join(sql)
 
     if debugx:
@@ -141,7 +147,7 @@ def write_data(msg_content, eid):
             retries = 10
             while retries > 0 and query_job.errors:
                 rand_sleep = (10/retries) + randrange(5)
-                print(f"DEBUGX:" + eid + ":" + "Sleeping " + str(rand_sleep) + " seconds and retrying query " + str(retries) )
+                print(f"DEBUGX:" + eid + ":" + "Sleeping " + str(rand_sleep) + " seconds and retrying query " + str(retries))
                 time.sleep(rand_sleep)
                 query_job = client.query(query)
                 retries = retries - 1
@@ -152,5 +158,3 @@ def write_data(msg_content, eid):
 
     else:
         print(f"DEBUGX:" + eid + ":" + "Empty Query")
-
-
