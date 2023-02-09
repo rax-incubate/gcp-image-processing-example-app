@@ -70,7 +70,6 @@ def new_request(request):
     if debugx:
         print(f"DEBUGX:" + eid + ":entity_type:" + str(entity_type or ''))
 
-
     client = bigquery.Client()
     query = "SELECT DISTINCT filename, bucket FROM " + bq_dataset_id + "." + bq_table_id + " LIMIT 100"
 
@@ -98,7 +97,7 @@ def new_request(request):
     if debugx:
         print(f"DEBUGX:" + eid + ":Query:" + query)
 
-    html =  list()
+    html = list()
 
     html.append("""
 <!DOCTYPE html>
@@ -115,7 +114,7 @@ def new_request(request):
     ent_type_filter_query = "SELECT e.type,count(e.type) as e_cnt FROM " + bq_dataset_id + "." + bq_table_id + " , UNNEST(entities) e WHERE e.type != 'OTHER' GROUP by e.type ORDER by e_cnt DESC LIMIT 10"
     if debugx:
         print(f"DEBUGX:" + eid + ":Entity type filter query:" + ent_type_filter_query)
-    ent_type_filter_query_job = client.query(ent_type_filter_query)  
+    ent_type_filter_query_job = client.query(ent_type_filter_query)
     ent_type_filter_query_rows = ent_type_filter_query_job.result()
     html.append("Entity type (top 10):")
     for ent_type_filter_query_row in ent_type_filter_query_rows:
@@ -125,7 +124,7 @@ def new_request(request):
     ent_name_filter_query = "SELECT e.name,count(e.name) as e_cnt FROM " + bq_dataset_id + "." + bq_table_id + " , UNNEST(entities) e GROUP by e.name ORDER by e_cnt DESC LIMIT 10"
     if debugx:
         print(f"DEBUGX:" + eid + ":Entity name filter query:" + ent_name_filter_query)
-    ent_name_filter_query_job = client.query(ent_name_filter_query)  
+    ent_name_filter_query_job = client.query(ent_name_filter_query)
     ent_name_filter_query_rows = ent_name_filter_query_job.result()
     html.append("Entity name (top 10):")
     for ent_name_filter_query_row in ent_name_filter_query_rows:
@@ -135,26 +134,24 @@ def new_request(request):
     face_label_filter_query = "SELECT f.description,count(f.description) as f_cnt FROM " + bq_dataset_id + "." + bq_table_id + " , UNNEST(face_labels) f GROUP by f.description ORDER by f_cnt DESC LIMIT 10"
     if debugx:
         print(f"DEBUGX:" + eid + ":Face label filter query:" + face_label_filter_query)
-    face_label_filter_query_job = client.query(face_label_filter_query)  
+    face_label_filter_query_job = client.query(face_label_filter_query)
     face_label_filter_query_rows = face_label_filter_query_job.result()
     html.append("Face labels (Top 10):")
     for face_label_filter_query_row in face_label_filter_query_rows:
         html.append("<a href={}?face_desc={}>{}</a> | ".format(request.base_url, face_label_filter_query_row["description"], face_label_filter_query_row["description"]))
     html.append("<br>")
 
-
-
     html.append("""
 <table border="1">
 <tbody>
 """)
-    query_job = client.query(query) 
-    rows = query_job.result() 
+    query_job = client.query(query)
+    rows = query_job.result()
     if rows.total_rows == 0:
         html.append("<b>No results found.</b>")
     else:
         html.append(f"<b>Showing {rows.total_rows} results.</b>")
-        col_cnt = 0 
+        col_cnt = 0
         first_row = True
         for row in rows:
             if col_cnt % 3 == 0:
@@ -167,7 +164,6 @@ def new_request(request):
                 col_cnt = 0
             html.append("<td>\n")
             html.append("<img src=https://storage.googleapis.com/{}/{} alt={}>\n".format(row["bucket"], row["filename"], row["filename"]))
-            #html.append("File:{}".format(row["filename"]))
             html.append("</td>\n")
             html.append("<td bgcolor=grey>&nbsp;&nbsp;&nbsp;</td>\n")
             col_cnt = col_cnt + 1
