@@ -11,16 +11,15 @@ from google.cloud import pubsub_v1
 @functions_framework.cloud_event
 # receive new image events from GCS
 def new_image_file(cloud_event):
+    # Generate a ID that we can pass to the logs
+    # This is useful for tracking and debugging
     eid = uuid.uuid4().hex
     debugx = False
     if os.environ.get('DEBUGX') == "1":
         debugx = True
 
     data = cloud_event.data
-
-    event_id = cloud_event["id"]
     event_type = cloud_event["type"]
-
     bucket = data["bucket"]
     filename = data["name"]
 
@@ -29,8 +28,8 @@ def new_image_file(cloud_event):
 
     process_image(bucket, filename, eid)
 
-# Get image content and extract text using document AI
 
+# Get image content and extract text using document AI
 
 def process_image(bucket_name: str, filename: str, eid: str):
     debugx = False
@@ -43,6 +42,7 @@ def process_image(bucket_name: str, filename: str, eid: str):
 
     storage_client = storage.Client()
     bucket = storage_client.bucket(bucket_name)
+    # This can be auto-detected if there are many images
     mime_type = "image/png"
 
     image_content = bucket.get_blob(filename).download_as_bytes()
@@ -86,6 +86,7 @@ def publish_text(bucket: str, filename: str, extracted_text, eid: str):
     data['bucket'] = bucket
     data['file_name'] = filename
     data['extracted_text'] = extracted_text
+    data['eid'] = eid
 
     json_data = json.dumps(data)
     data = json_data.encode("utf-8")
