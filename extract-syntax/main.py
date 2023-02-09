@@ -90,6 +90,7 @@ def publish_text(bucket_name: str, file_name: str, syntax_data, eid):
     data['bucket'] = bucket_name
     data['file_name'] = file_name
     data['syntax_data'] = syntax_data
+    data['eid'] = eid
 
     json_data = json.dumps(data)
     data = json_data.encode("utf-8")
