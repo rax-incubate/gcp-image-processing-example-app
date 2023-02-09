@@ -8,24 +8,24 @@ from google.api_core.client_options import ClientOptions
 from google.cloud import bigquery
 from random import randrange
 
+
 @functions_framework.cloud_event
 # receive delete image events from GCS
-def delete_image_data(cloud_event):
-    eid = uuid.uuid4().hex
+def new_text(cloud_event):
     debugx = False
     if os.environ.get('DEBUGX') == "1":
         debugx = True
 
-    data = cloud_event.data
+    msg_content = base64.b64decode(cloud_event.data["message"]["data"]).decode()
+    json_data = json.loads(msg_content)
 
-    event_id = cloud_event["id"]
-    event_type = cloud_event["type"]
-
-    bucket = data["bucket"]
-    filename = data["name"]
+    if "eid" in json_data:
+        eid = json_data['eid']
+    else:
+        eid = uuid.uuid4().hex
 
     if debugx:
-        print(f"DEBUGX:{eid}:Event type:{event_type},Bucket:{bucket},File:{filename}")
+        print(f"DEBUGX:" + eid + ":" + msg_content)
     delete_data(bucket, filename, eid)
 
 
@@ -62,7 +62,7 @@ def delete_data(bucket, filename, eid):
             retries = 10
             while retries > 0 and query_job.errors:
                 rand_sleep = (10/retries) + randrange(5)
-                print(f"DEBUGX:" + eid + ":" + "Sleeping " + str(rand_sleep) + " seconds and retrying query " + str(retries) )
+                print(f"DEBUGX:" + eid + ":" + "Sleeping " + str(rand_sleep) + " seconds and retrying query " + str(retries))
                 time.sleep(rand_sleep)
                 query_job = client.query(query)
                 retries = retries - 1
