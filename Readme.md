@@ -1,68 +1,69 @@
+# Elevator Pitch
+
+Look at the art of possible with GCP's optical text extraction, natural language processing and vision APIs. Extract, process, classify text from a large collection of images and assign labels to faces in the images.
+
 # Summary
 
-This article/tutorial is an experiment with AI services on GCP using a sample application. We will be doing the following:-
+The following is an experiment with AI services and Cloud functions on GCP using a sample application.  We will be doing the following:-
 
  - Extract text from a large set of comic strips. We will focus on [Calvin and Hobbes](https://en.wikipedia.org/wiki/Calvin_and_Hobbes) for this example, but this could be any comic strip collection of images. 
 
- - Analyse the syntax of the extracted text. In the case of syntax, we mean words and use the automated parts of speech extraction in GCP's natural language processing.
-
+ - Analyse and extract the syntax-parts of speech extraction of the extracted text
  - Analyse the sentiment of the extracted text using GCP's natural language processing.
-
  - Analyse the entities in the extracted text using GCP's natural language processing.
-
- - Detect face labels in the image using GCP's Vision API
- 
+ - Detect face labels in the images using GCP's Vision API
  - Build a basic but working web interface to test and demo the working of these examples.
+ - Importantly, we will also read the comics in the process.
 
- - Read the comics in the process. Why not? 
-
- - Other areas of interest where
-  - Content classification - This is not very useful in this case as tthe text we extract is enough for the use-case and the category is largely the same. We did try this and most were "/Arts & Entertainment/Humor/Other" or "/Arts & Entertainment/Comics & Animation/Comics"
-  - Identify faces - The vision API can do this but it is somethign we could try later.
-
-From a design standpoint, we are also imposing some self-imposed technological constraints to test the powers of the Google Cloud Serverless platforms. The following are the design principles.
+From a Cloud design standpoint, we are also imposing some self-imposed technological constraints to test the powers of the Google Cloud Serverless platforms. The following are the design principles.
 
  - All code will be implemented directly in Cloud Functions. We will use gen 2, which uses Cloud Run under the hood. Technically, that means we can package this code into containers and run it on Cloud Run. 
-
  - Keep the application architecture simple and use separate functions for modular tasks. This effectively introduces a micro-services-like design. 
-
  - Use Pub/Sub as a message bus for the distributed and async processing.
-
  - Use cloud Functions to service any web frontend. We will skip using a load balancer for simplicity. Cloud functions already have a GCP-managed load balancer, and unless you use custom domains, you don't need a load balancer. It is easy to front this with a load balancer. 
-
  - File storage will be Google Cloud Storage (GCS).
-
- - Relational data storage will be done using Big Query. Cloud SQL or Cloud Spanner are better choices but they were discarded to reduce overall cost. Big Query was by far the most cost-effective option but it does have some limitations for this use-case. See [Big Query Quotas](https://cloud.google.com/bigquery/quotas) for specifics. This can be fixed using a feature which is still in preview stage called [query queues](https://cloud.google.com/bigquery/docs/query-queues)
+ - Relational data storage will be done using Big Query. Cloud SQL or Cloud Spanner are better choices but they were discarded to reduce overall experimentation cost. Big Query was by far the most cost-effective option but it does have some limitations for this use-case when it comes to concurrent DML statements. See [Big Query Quotas](https://cloud.google.com/bigquery/quotas) for specifics. This can be fixed using a feature which is still in preview stage called [query queues](https://cloud.google.com/bigquery/docs/query-queues). For our experiments, we added some extra code to handle this issue. If we were to run this in production, Cloud SQL or Cloud Spanner is recomended. 
 
 Here's the visual of the design we will implement:
 
 ![](design.png)
 
 At a high level, 
-  * Image data arrives in a GCP bucket.
+  * Image data arrives in a GCS bucket. This could via the cli or any other means. 
   * GCS Event processing is triggered to detect face labels from the image.
   * GCS Event processing is triggered to extract text from the image.
-  * Extracted text is sent to NLP for syntax processing in a separate job.
-  * Extracted text is sent to NLP for sentiment processing in a separate job.
-  * Extracted text is sent to NLP for entity processing in a separate job.
-  * All processed information is stored in a database by a data-writer job.
+  * Extracted test is passed to pub/sub for:-
+    * Syntax processing using NLP in a separate job.
+    * Sentiment processing using to NLP in a separate job.
+    * Entity processing using NLP in a separate job.
+  * All processed information is stored in a database using a simplified schema by a data-writer job.
   * A separate job handles deletion events.
-  * A simple web-based frontend for demo that shows the results and allows basic filtering 
+  * A simple web-based frontend for demo that shows the results and allows basic filtering.
   
 # Implementation
 
+## Pre-requisites
+
+ * Admin access to a GCP project
+ * Google Cloud CLI
+ * Google Cloud storage CLI
+ * BigQuery CLI
+ * Python
+ * Utiliites like curl, jq, git
+ 
+ 
 ## Pick/create a GCP project
 
-We assume this is done on an empty project without any specific restrictions. us-east1 is the region used, but this could work in any region with those services. 
+We assume this is done on an empty project without any specific restrictions. us-east1 is the region used, but this could work in any region with those services. The region is hard coded in the code and so we don't recommend changing it. 
 
   * Authenticate to Google and make sure you have access to the Project. 
   
-  * Set the project in the cli
+  * Set the project in the cli.
   ```
-  gcloud config set project calvin-h314
+  gcloud config set project <project name>
   ```
 
-  * Enable the APIs we need
+  * Enable the APIs we need.
   ```
   for gcp_service in "documentai.googleapis.com" "cloudfunctions.googleapis.com" "cloudbuild.googleapis.com" "artifactregistry.googleapis.com" "eventarc.googleapis.com" "run.googleapis.com" "language.googleapis.com" "vision.googleapis.com"; do  gcloud services enable $gcp_service; done
   ```
@@ -71,86 +72,88 @@ We assume this is done on an empty project without any specific restrictions. us
 
 ## Setup the environment
 
-  * Clone the repo
+  * Clone the repo. This has all the code you need for this demo. 
     ```
-    git clone https://github.com/RSS-Engineering/calvin
+    git clone https://github.com/rax-incubate/gcp-image-processing-example-app
     ```
 
-  * Setup your env variables
+  * Setup your env variables.
     ```
     PROJECT_ID=$(gcloud config get-value project)
     PROJECT_NUMBER=$(gcloud projects list --filter="project_id:$PROJECT_ID" --format='value(project_number)')
-    CALVIN_REPO="<your git clone folder>"
+    GCP_IMAGE_APP="<your git clone folder>"
     ```
 
 ## Storage Setup
 
-  * Create bucket for the images. This bucket needs to be publicly accessible as we will also use this in our public facing web interface
+  * Create bucket for the images. This can be named anything. This bucket needs to be publicly accessible as we will also use this in our public facing web interface.
     ```
-    gsutil mb -l us-east1 gs://calvin-images
-    gsutil iam ch allUsers:objectViewer gs://calvin-images
+    GCS_BUCKET='calvin-images'
+    gsutil mb -l us-east1 gs://$GCS_BUCKET
+    gsutil iam ch allUsers:objectViewer gs://$GCS_BUCKET
     ```
 
 ## Create pub sub topics
 
-  * Create pub/sub topic for the text extraction 
+  * Create pub/sub topic for the text extraction.
     ```
-    gcloud pubsub topics create calvin-text-extract \
+    gcloud pubsub topics create images-text-extract \
      --message-retention-duration 3d \
      --project $PROJECT_ID 
     ```
 
-      * (Optional) Create pub/sub subscription for debug and demo purposes
+      * (Optional) Create pub/sub subscription for debug and demo purposes. You only need this if you are pulling the messages outside of the code.
       ```
       gcloud pubsub subscriptions create extracted-text \
-      --topic calvin-text-extract \
+      --topic images-text-extract \
       --retain-acked-messages \
       --project $PROJECT_ID 
       ```
 
-  * Create pub/sub topic for processed text that will be writted to the database
+  * Create pub/sub topic for processed text that will be writted to the database.
     ```
-    gcloud pubsub topics create calvin-data-writer \
+    gcloud pubsub topics create images-data-writer \
      --message-retention-duration 3d \
      --project $PROJECT_ID 
     ```
 
-      * (Optional)Create pub/sub subscription for debug/demo purposes
+      * (Optional)Create pub/sub subscription for debug/demo purposes.
       ```
       gcloud pubsub subscriptions create data-writer \
-      --topic calvin-data-writer \
+      --topic images-data-writer \
       --retain-acked-messages \
       --project $PROJECT_ID 
       ```
 
 ## Create BQ dataset and table
 
-  * Create dataset
+  * Create dataset.
     ```
-    bq  --project_id $PROJECT_ID  mk calvin
+    bq  --project_id $PROJECT_ID  mk images
     ```
 
-  * Create table
+  * Create table.
     ```
     bq --project_id $PROJECT_ID query --use_legacy_sql=false \
-    'CREATE TABLE calvin.calvin_text ( 
-      bucket STRING(256), 
-      filename STRING(256), 
-      syntax_text STRING(1024) ,
-      sentiment_score NUMERIC ,
-      sentiment_magnitude NUMERIC ,
+    'CREATE TABLE images.images_info ( 
+      bucket STRING(256),
+      filename STRING(256),
+      syntax_text STRING(1024),
+      sentiment_score NUMERIC,
+      sentiment_magnitude NUMERIC,
       last_update DATETIME,
-      );'
+      entities ARRAY<STRUCT<name STRING, type STRING, score NUMERIC>>,
+      face_labels ARRAY<STRUCT<description STRING, score NUMERIC, topicality NUMERIC>>
+    );'
     ```
 
 ## Extract text from images
 
-This service uses Document AI to extract text from an image. A GCS event is triggered when an object is uploaded to a bucket, and a Cloud function passes the image to Document AI for processing. It then collects and sends the extracted text to a pub/sub topic.
+This service uses Document AI to extract text from an image. Document AIS has several features, including specialised processing forms such as 1040, driver's license, contract documents and more. For our use case, the standard Document OCR works, and that is what we will use. A GCS event is triggered when an object is uploaded to a bucket, and the triggered Cloud function passes the image to Document AI for processing. It then collects and sends the extracted text to a pub/sub topic.
 
-
-  * Create a processor in Document AI. There is no glcoud equivalent for this. This can also be done in Python if needed. We are also assuming that the processor is in the US region. For this exercise, we recommend keeping this to US and the name of the processor the same as well. If you change this, you will have to change it in the code as well. 
+  * Create a processor in Document AI. There is no glcoud equivalent for this. We are also assuming that the processor is in the US region. For this exercise, we recommend keeping this to US and the name of the processor the same as well. If you change this, you will have to change it in the code as well. 
     ```
-    echo '{ "type": "OCR_PROCESSOR", "displayName": "calvin-images" }' > proc-request.json
+    echo '{ "type": "OCR_PROCESSOR", "displayName": "app-images" }' > proc-request.json
     ```
 
     ```
@@ -161,9 +164,9 @@ This service uses Document AI to extract text from an image. A GCS event is trig
       "https://us-documentai.googleapis.com/v1/projects/$PROJECT_ID/locations/us/processors"
     ```
 
-  * Get the processor ID is hacky because the cli has no easy way. 
+  * Getting the processor ID is hacky because the cli has no easy way. 
     ```
-    cd $CALVIN_REPO/extract-text
+    cd $GCP_IMAGE_APP/extract-text
     DAI_PROC_ID=$(curl -s -X GET -H "Authorization: Bearer $(gcloud auth print-access-token)" -H "Content-Type: application/json; charset=utf-8" "https://us-documentai.googleapis.com/v1/projects/$PROJECT_ID/locations/us/processors" | jq  '.processors[].name' | sed 's/\// /g'  | awk '{print $6}' | sed 's/"//g')
     ```
       * If you don't have jq, get the ID and update it in the next step 
@@ -197,13 +200,13 @@ This service uses Document AI to extract text from an image. A GCS event is trig
       PROJECT_NO: "476719929030"
       PROC_LOCATION: "us"
       PROC_ID: "f5a19ce0555a6ced"
-      TOPIC_ID: "calvin-text-extract"
+      TOPIC_ID: "images-text-extract"
       DEBUGX: "1"
       ```
 
   * Deploy the extract-text function. This function will extract text using OCR. 
     ```
-    cd $CALVIN_REPO/extract-text
+    cd $GCP_IMAGE_APP/extract-text
     gcloud functions deploy extract-text \
      --gen2 \
      --runtime=python310 \
@@ -211,14 +214,14 @@ This service uses Document AI to extract text from an image. A GCS event is trig
      --source=. \
      --entry-point=new_image_file \
      --trigger-event-filters="type=google.cloud.storage.object.v1.finalized" \
-     --trigger-event-filters="bucket=calvin-images"  \
+     --trigger-event-filters="bucket=$GCS_BUCKET"  \
      --env-vars-file env.yaml \
      --project $PROJECT_ID
     ```
 
   * Unit test the function with a sample image. This repo
     ```
-    gsutil cp sample.png gs://calvin-images/sample.png
+    gsutil cp sample.png gs://$GCS_BUCKET/sample.png
     ```
 
   * Review logs for function execution
@@ -240,38 +243,38 @@ This service uses Document AI to extract text from an image. A GCS event is trig
 
   * Delete the image. At this point we have the most basic of functions in place and the start of event stream.
     ```
-    gsutil rm gs://calvin-images/sample.png
+    gsutil rm gs://$GCS_BUCKET/sample.png
     ```
 
 ## Extract syntax
 
-Now, we move to the language elements. This service uses the NLP API to extract word tokens. The NLP syntax API extracts parts of speech, and you can filter by the ones you want. For this example, we are only extracting the following types: "NOUN", "ADJ", "VERB". This extracted syntax is then passed to a pub/sub topic for data recording.
+Let's move to the language elements. GCP has two Natural language products. AutoML and Natural Language API. Auto ML is suited for more custom use cases. The Natural Language API does several things. In this step, we use the NLP API to analyse syntax and extract word tokens. The NLP syntax API also classifies the tokens by parts of speech. This is handy if you want to create automated search filter terms using commonly occurring words. We use this feature to extract the following types: "NOUN", "ADJ", "VERB". This extracted text is then passed to a pub/sub topic for data processing.
 
   * Update `env.yaml` with the right values. Leave DEBUGX to 1 for additional logging. View the env.yaml to make sure this formatted correctly.
     ```
-    cd $CALVIN_REPO/extract-syntax
+    cd $GCP_IMAGE_APP/extract-syntax
 
-    echo -e "PROJECT_ID: \"$PROJECT_ID\"\nPROJECT_NO: \"$PROJECT_NUMBER\"\nTOPIC_ID: \"calvin-data-writer\"\nDEBUGX: \"1\"" > env.yaml
+    echo -e "PROJECT_ID: \"$PROJECT_ID\"\nPROJECT_NO: \"$PROJECT_NUMBER\"\nTOPIC_ID: \"images-data-writer\"\nDEBUGX: \"1\"" > env.yaml
     cat env.yaml
     ```
         * Sample env.yaml
         ```
         PROJECT_ID: "calvin-h314"
         PROJECT_NO: "476719929030"
-        TOPIC_ID: "calvin-data-writer"
+        TOPIC_ID: "images-data-writer"
         DEBUGX: "1"
         ```
 
   * Deploy the extract-syntax function. 
     ```
-    cd $CALVIN_REPO/extract-syntax
+    cd $GCP_IMAGE_APP/extract-syntax
     gcloud functions deploy extract-syntax \
      --gen2 \
      --runtime=python310 \
      --region=us-east1 \
      --source=. \
      --entry-point=new_text \
-     --trigger-topic=calvin-text-extract  \
+     --trigger-topic=images-text-extract  \
      --env-vars-file env.yaml \
      --retry \
      --project $PROJECT_ID
@@ -288,19 +291,19 @@ Now, we move to the language elements. This service uses the NLP API to extract 
 
 ## Extract sentiment
 
-Similar to the syntax service, this service uses the NLP API to extract sentiment from the extracted text. The sentiment score and magnitude for all the text are then passed to a pub/sub topic for data recording. 
+The concept with sentiment analysis is the same as the syntax service. We use the NLP API to extract sentiment from the text. The use of sentiment for filtering varies by text quality and quantity. For some of these comic strips, there isn't enough data to provide accurate sentiment, but in general, this works. The sentiment score and magnitude are then passed to a pub/sub topic for data processing. 
 
   * Update `env.yaml` with the right values. Leave DEBUGX to 1 for additional logging. View the env.yaml to make sure this formatted correctly.
     ```
-    cd $CALVIN_REPO/extract-sentiment
-    echo -e "PROJECT_ID: \"$PROJECT_ID\"\nPROJECT_NO: \"$PROJECT_NUMBER\"\nTOPIC_ID: \"calvin-data-writer\"\nDEBUGX: \"1\"" > env.yaml
+    cd $GCP_IMAGE_APP/extract-sentiment
+    echo -e "PROJECT_ID: \"$PROJECT_ID\"\nPROJECT_NO: \"$PROJECT_NUMBER\"\nTOPIC_ID: \"images-data-writer\"\nDEBUGX: \"1\"" > env.yaml
     cat env.yaml
     ```
       * Sample env.yaml
       ```
       PROJECT_ID: "calvin-h314"
       PROJECT_NO: "476719929030"
-      TOPIC_ID: "calvin-data-writer"
+      TOPIC_ID: "images-data-writer"
       DEBUGX: "1"
       ```
 
@@ -313,7 +316,7 @@ Similar to the syntax service, this service uses the NLP API to extract sentimen
      --region=us-east1 \
      --source=. \
      --entry-point=new_text \
-     --trigger-topic=calvin-text-extract \
+     --trigger-topic=images-text-extract \
      --env-vars-file env.yaml \
      --retry \
      --project $PROJECT_ID
@@ -329,11 +332,11 @@ Similar to the syntax service, this service uses the NLP API to extract sentimen
     ```
 ## Extract entities
 
-Similar to the syntax service, this service uses the NLP API to extract entities from the extracted text. Entities are similar to syntax but instead of the entire parts of speech, this extracts specific entities like proper nouns, location and similar. The entity type, salience score and the metadata for entities for all text is then passed to a pub/sub topic for data recording. 
+Similar to the syntax service, this service uses the NLP API to extract entities from the extracted text. Entities are similar to the syntax, but instead of the entire parts of speech, this extracts specific entities like proper nouns, location and similar. The entity type, salience score and the metadata for entities for all text are then passed to a pub/sub topic for data processing. 
 
   * Update `env.yaml` with the right values. Leave DEBUGX to 1 for additional logging. View the env.yaml to make sure this formatted correctly.
     ```
-    cd $CALVIN_REPO/extract-sentiment
+    cd $GCP_IMAGE_APP/extract-sentiment
     echo -e "PROJECT_ID: \"$PROJECT_ID\"\nPROJECT_NO: \"$PROJECT_NUMBER\"\nTOPIC_ID: \"calvin-data-writer\"\nDEBUGX: \"1\"" > env.yaml
     cat env.yaml
     ```
@@ -341,7 +344,7 @@ Similar to the syntax service, this service uses the NLP API to extract entities
       ```
       PROJECT_ID: "calvin-h314"
       PROJECT_NO: "476719929030"
-      TOPIC_ID: "calvin-data-writer"
+      TOPIC_ID: "images-data-writer"
       DEBUGX: "1"
       ```
 
@@ -354,7 +357,7 @@ Similar to the syntax service, this service uses the NLP API to extract entities
      --region=us-east1 \
      --source=. \
      --entry-point=new_text \
-     --trigger-topic=calvin-text-extract \
+     --trigger-topic=images-text-extract \
      --env-vars-file env.yaml \
      --retry \
      --project $PROJECT_ID
@@ -363,19 +366,19 @@ Similar to the syntax service, this service uses the NLP API to extract entities
 
 ## Detect face data
 
-Similar to the syntax service, this service uses the NLP API to extract entities from the extracted text. Entities are similar to syntax but instead of the entire parts of speech, this extracts specific entities like proper nouns, location and similar. The entity type, salience score and the metadata for entities for all text is then passed to a pub/sub topic for data recording. 
+We use the Vision API for this purpose. Unlike the previous one, this receives the event from GCS and processes the image in GCS. There are quite a few things we can do with Vision API. For example, you can detect faces using user defined labels like a person's name.  In this example, we are sticking to the Google generated label data such "Gesture" or "Organ" or "Cartoon".
 
   * Update `env.yaml` with the right values. Leave DEBUGX to 1 for additional logging. View the env.yaml to make sure this formatted correctly.
     ```
-    cd $CALVIN_REPO/detect-faces
-    echo -e "PROJECT_ID: \"$PROJECT_ID\"\nPROJECT_NO: \"$PROJECT_NUMBER\"\nTOPIC_ID: \"calvin-data-writer\"\nDEBUGX: \"1\"" > env.yaml
+    cd $GCP_IMAGE_APP/detect-faces
+    echo -e "PROJECT_ID: \"$PROJECT_ID\"\nPROJECT_NO: \"$PROJECT_NUMBER\"\nTOPIC_ID: \"images-data-writer\"\nDEBUGX: \"1\"" > env.yaml
     cat env.yaml
     ```
       * Sample env.yaml
       ```
       PROJECT_ID: "calvin-h314"
       PROJECT_NO: "476719929030"
-      TOPIC_ID: "calvin-data-writer"
+      TOPIC_ID: "images-data-writer"
       DEBUGX: "1"
       ```
 
@@ -389,7 +392,7 @@ Similar to the syntax service, this service uses the NLP API to extract entities
      --source=. \
      --entry-point=new_image_file \
      --trigger-event-filters="type=google.cloud.storage.object.v1.finalized" \
-     --trigger-event-filters="bucket=calvin-images"  \
+     --trigger-event-filters="bucket=$GCS_BUCKET"  \
      --env-vars-file env.yaml \
      --retry \
      --project $PROJECT_ID
@@ -406,20 +409,20 @@ Similar to the syntax service, this service uses the NLP API to extract entities
 
 ## Data writer 
 
-This service does a simple job of taking values and writing them into Big Query. Think of this as the data service that can be replaced with something else. For example, write to Cloud SQL or Spanner. You can also have multiple data-writers.
+This service does a simple job of taking values and writing them into Big Query. Think of this as the data service that can be replaced with something else. For example, write to Cloud SQL or Spanner. You can also have multiple data-writers.  The code does have some rudimentary retry capabilities to workaround the Big Query DML implementation.  A more advanced approach would be to batch these writes together and trigger data jobs in batches.  Also for simplicity we structured all the image information into one BQ table and this could be decoupled into individual tables.
 
   * Update `env.yaml` with the right values. Leave DEBUGX to 1 for additional logging. View the env.yaml to make sure this formatted correctly.
     ```
-    cd $CALVIN_REPO/data-writer
-    echo -e "PROJECT_ID: \"$PROJECT_ID\"\nPROJECT_NO: \"$PROJECT_NUMBER\"\nBQ_DATASET_ID: \"calvin\"\nBQ_TABLE_ID: \"calvin_text\"\nDEBUGX: \"1\"" > env.yaml
+    cd $GCP_IMAGE_APP/data-writer
+    echo -e "PROJECT_ID: \"$PROJECT_ID\"\nPROJECT_NO: \"$PROJECT_NUMBER\"\nBQ_DATASET_ID: \"images\"\nBQ_TABLE_ID: \"images_info\"\nDEBUGX: \"1\"" > env.yaml
     cat env.yaml
     ```
       * Sample env.yaml
       ```
       PROJECT_ID: "calvin-h314"
       PROJECT_NO: "476719929030"
-      BQ_DATASET_ID: "calvin"
-      BQ_TABLE_ID: "calvin_text"
+      BQ_DATASET_ID: "images"
+      BQ_TABLE_ID: "images_info"
       DEBUGX: "1"
       ```
   * Deploy the data-writer function. 
@@ -431,7 +434,7 @@ This service does a simple job of taking values and writing them into Big Query.
      --region=us-east1 \
      --source=. \
      --entry-point=new_text \
-     --trigger-topic=calvin-data-writer  \
+     --trigger-topic=images-data-writer  \
      --env-vars-file env.yaml \
      --retry \
      --project $PROJECT_ID
@@ -453,21 +456,21 @@ This service takes care of images that are deleted from the GCS bucket. Again th
 
   * Update `env.yaml` with the right values. Leave DEBUGX to 1 for additional logging. View the env.yaml to make sure this formatted correctly.
     ```
-    cd $CALVIN_REPO/data-deleter
-    echo -e "PROJECT_ID: \"$PROJECT_ID\"\nPROJECT_NO: \"$PROJECT_NUMBER\"\nBQ_DATASET_ID: \"calvin\"\nBQ_TABLE_ID: \"calvin_text\"\nDEBUGX: \"1\"" > env.yaml
+    cd $GCP_IMAGE_APP/data-deleter
+    echo -e "PROJECT_ID: \"$PROJECT_ID\"\nPROJECT_NO: \"$PROJECT_NUMBER\"\nBQ_DATASET_ID: \"images\"\nBQ_TABLE_ID: \"images_info\"\nDEBUGX: \"1\"" > env.yaml
     cat env.yaml
     ```
       * Sample env.yaml
       ```
       PROJECT_ID: "calvin-h314"
       PROJECT_NO: "476719929030"
-      BQ_DATASET_ID: "calvin"
-      BQ_TABLE_ID: "calvin_text"
+      BQ_DATASET_ID: "images"
+      BQ_TABLE_ID: "images_text"
       DEBUGX: "1"
 
   * Deploy the data-deleter function. 
     ```
-    cd $CALVIN_REPO/data-deleter
+    cd $GCP_IMAGE_APP/data-deleter
     gcloud functions deploy data-deleter \
      --gen2 \
      --runtime=python310 \
@@ -475,7 +478,7 @@ This service takes care of images that are deleted from the GCS bucket. Again th
      --source=. \
      --entry-point=delete_image_data \
      --trigger-event-filters="type=google.cloud.storage.object.v1.deleted" \
-     --trigger-event-filters="bucket=calvin-images"  \
+     --trigger-event-filters="bucket=$GCS_BUCKET"  \
      --env-vars-file env.yaml \
      --project $PROJECT_ID
     ```
@@ -494,21 +497,21 @@ This is a simple service that provides a web interface to demonstrate the workin
 
   * Update `env.yaml` with the right values. Leave DEBUGX to 1 for additional logging. View the env.yaml to make sure this formatted correctly.
     ```
-    cd $CALVIN_REPO/web-ui
-    echo -e "PROJECT_ID: \"$PROJECT_ID\"\nPROJECT_NO: \"$PROJECT_NUMBER\"\nBQ_DATASET_ID: \"calvin\"\nBQ_TABLE_ID: \"calvin_text\"\nDEBUGX: \"1\"" > env.yaml
+    cd $GCP_IMAGE_APP/web-ui
+    echo -e "PROJECT_ID: \"$PROJECT_ID\"\nPROJECT_NO: \"$PROJECT_NUMBER\"\nBQ_DATASET_ID: \"images\"\nBQ_TABLE_ID: \"images_info\"\nDEBUGX: \"1\"" > env.yaml
     cat env.yaml
     ```
       * Sample env.yaml
       ```
       PROJECT_ID: "calvin-h314"
       PROJECT_NO: "476719929030"
-      BQ_DATASET_ID: "calvin"
-      BQ_TABLE_ID: "calvin_text"
+      BQ_DATASET_ID: "images"
+      BQ_TABLE_ID: "images_info"
       DEBUGX: "1"
   
   * Deploy the web-ui function. 
     ```
-    cd $CALVIN_REPO/web-ui
+    cd $GCP_IMAGE_APP/web-ui
     gcloud functions deploy web-ui \
      --gen2 \
      --allow-unauthenticated \
@@ -539,7 +542,7 @@ One of the challenges of a micro-services architecture is to build observability
 
   * To create this dashboard, run the following
   ```
-  cd $CALVIN_REPO/monitoring
+  cd $GCP_IMAGE_APP/monitoring
   gcloud monitoring dashboards create \
   --project $PROJECT_ID\
   --config-from-file cloud-monitoring-dashboard.json
@@ -576,7 +579,7 @@ If you have reached this far, you have a fully working application but to confir
 
   * Run the following end-to-end test. This will upload a sample image and put it through the different stages of text extraction, syntax extraction, sentiment analysis and finally, delete the image. If you used a different GCS Bucket, update the GS_BUCKET variable in the code. If you are doing this in a demo, it is most likely to fail :-) 
   ```
-  cd $CALVIN_REPO/tests
+  cd $GCP_IMAGE_APP/tests
   python end-to-end-test.py 
   ```
   Expected output:
@@ -596,7 +599,7 @@ If you have reached this far, you have a fully working application but to confir
 
   * If the above works, time to make this work with 100 images.
   ```
-  gsutil -q cp -c gs://calvin.tty0.me/calvin-9{0..9}{0..9}.png  gs://calvin-images/
+  gsutil -q cp -c gs://calvin.tty0.me/calvin-9{0..9}{0..9}.png  gs://$GCS_BUCKET/
   ```
 
   * Time to leave the boring console and code to go read some of the comics using the different URLs below. You can experiment with other searches.  
@@ -607,7 +610,7 @@ If you have reached this far, you have a fully working application but to confir
 
   * If we need more images. This has 900+ images. You can test with all but your cost may go up a bit.  Note, you might see some errors with concurrency here. BQ supports 100 concurrent INSERT statements and so anything above will fail unless you queue them in code. The code does do some retries to avoid this but it won't work in all cases. The limit for DMLs like DELETE is 20 as well. 
   ```
-  gsutil -q cp -c gs://calvin.tty0.me/calvin-{6,7,8}{0..9}{0..9}.png  gs://calvin-images/
+  gsutil -q cp -c gs://calvin.tty0.me/calvin-{6,7,8}{0..9}{0..9}.png  gs://$GCS_BUCKET/
   ```
 
 ## Cost governance
@@ -644,15 +647,15 @@ Overall, running the above should not cost more than 5 to 10 USD per month. Goog
   ```
   gcloud pubsub subscriptions delete extracted-text --project $PROJECT_ID 
   gcloud pubsub subscriptions delete data-writer --project $PROJECT_ID 
-  gcloud pubsub topics delete calvin-text-extract --project $PROJECT_ID 
-  gcloud pubsub topics delete calvin-data-writer --project $PROJECT_ID
+  gcloud pubsub topics delete images-text-extract --project $PROJECT_ID 
+  gcloud pubsub topics delete images-data-writer --project $PROJECT_ID
   ```
 
   * Cleanup the storage bucket
   ```
-  gsutil rm -r gs://calvin-images
-  bq --project_id $PROJECT_ID query --use_legacy_sql=false 'DROP TABLE calvin.calvin_text;'
-  bq  --project_id $PROJECT_ID  rm -f calvin
+  gsutil rm -r gs://$GCS_BUCKET
+  bq --project_id $PROJECT_ID query --use_legacy_sql=false 'DROP TABLE images.images_info;'
+  bq  --project_id $PROJECT_ID  rm -f images
   ```
 
   * Get the processor ID for calvin-images. There is no method in the API to get this using the human friendly name. 
@@ -675,7 +678,7 @@ Overall, running the above should not cost more than 5 to 10 USD per month. Goog
 
  * Cloud AI is fun. Not the same as Calvin and Hobbes but fun :-)
 
- * Start simple and then pile on. It is amazing what momentum brings when you have little wins.  Conversely, knowing when to stop is important as well.  There are lots of these cool APIs but not all will be revelant for your examples. 
+ * Start simple and then add to it. It is amazing what momentum brings when you have little wins.  Conversely, knowing when to stop is important as well.  There are lots of these cool APIs but not all will be revelant for your examples. 
 
  * GCP services are great to experiment with. There are lots of online examples to get you started.
 
