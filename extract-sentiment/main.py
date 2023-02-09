@@ -11,13 +11,17 @@ from google.cloud import pubsub_v1
 @functions_framework.cloud_event
 # receive new text events from pub sub
 def new_text(cloud_event):
-    eid = uuid.uuid4().hex
-
     debugx = False
     if os.environ.get('DEBUGX') == "1":
         debugx = True
 
     msg_content = base64.b64decode(cloud_event.data["message"]["data"]).decode()
+    json_data = json.loads(msg_content)
+
+    if "eid" in json_data:
+        eid = json_data['eid']
+    else:
+        eid = uuid.uuid4().hex
 
     if debugx:
         print(f"DEBUGX:" + eid + ":" + msg_content)
@@ -38,9 +42,9 @@ def extract_sentiment(msg_content, eid):
 
     json_data = json.loads(msg_content)
 
+    # Language detection can be done separately 
     language = "en"
     document = {"content": json_data['extracted_text'], "type_": type_, "language": language}
-
     encoding_type = language_v1.EncodingType.UTF8
 
     response = client.analyze_sentiment(
@@ -75,6 +79,7 @@ def publish_text(bucket_name: str, file_name: str, sentiment_score, sentiment_ma
     data['file_name'] = file_name
     data['sentiment_score'] = sentiment_score
     data['sentiment_magnitude'] = sentiment_magnitude
+    data['eid'] = eid
 
     json_data = json.dumps(data)
     data = json_data.encode("utf-8")
