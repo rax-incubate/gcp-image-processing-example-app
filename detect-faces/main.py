@@ -28,9 +28,8 @@ def new_image_file(cloud_event):
 
     process_image(bucket, filename, eid)
 
+
 # Get image content and extract text using document AI
-
-
 def process_image(bucket_name: str, filename: str, eid: str):
     debugx = False
     if os.environ.get('DEBUGX') == "1":
@@ -73,6 +72,7 @@ def publish_text(bucket_name: str, file_name: str,face_label_data,  eid):
     data['bucket'] = bucket_name
     data['file_name'] = file_name
     data['face_label_data'] = face_label_data
+    data['eid'] = eid
 
     json_data = json.dumps(data)
     data = json_data.encode("utf-8")
