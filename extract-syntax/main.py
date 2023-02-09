@@ -11,12 +11,17 @@ from google.cloud import pubsub_v1
 @functions_framework.cloud_event
 # receive new text events from pub sub
 def new_text(cloud_event):
-    eid = uuid.uuid4().hex
-
     debugx = False
     if os.environ.get('DEBUGX') == "1":
         debugx = True
+
     msg_content = base64.b64decode(cloud_event.data["message"]["data"]).decode()
+    json_data = json.loads(msg_content)
+
+    if "eid" in json_data:
+        eid = json_data['eid']
+    else:
+        eid = uuid.uuid4().hex
 
     if debugx:
         print(f"DEBUGX:" + eid + ":" + msg_content)
@@ -47,8 +52,10 @@ def extract_syntax(msg_content, eid):
         request={"document": document, "encoding_type": encoding_type}
     )
 
-    # We only need these for now
+    # Extract the categories we want
     useful_parts_of_speech = ["NOUN", "ADJ", "VERB"]
+
+    # An optional filter of words can also be implemented here
     extracted_words = ""
     for token in response.tokens:
         text = token.text
