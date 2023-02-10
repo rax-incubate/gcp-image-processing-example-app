@@ -26,7 +26,7 @@ From a Cloud design standpoint, we are also imposing some self-imposed technolog
 
 Here's the visual of the design we will implement:
 
-![](design.png)
+![](png/design.png)
 
 At a high level, 
   * Image data arrives in a GCS bucket. This could via the cli or any other means. 
@@ -634,6 +634,14 @@ Overall, running the above should not cost more than 5 to 10 USD per month. Goog
   * For Cloud Natural Language, syntax & sentiment analysis is a bit more complex to asses. 5000 Units per month are free which equates to 5 million characters processed. We will be well within that tier for this example. 
     * Beyond that, syntax analyis costs 0.5 USD per 1000 units & sentiment analysis costs 1 USD per 1000 units
     * More at [](https://cloud.google.com/natural-language/pricing)
+
+  * Some real numbers from our experiments
+    ![](png/cost1.png)
+    ![](png/cost2.png)
+    ![](png/cost3.png)
+    ![](png/cost4.png)
+
+ ## Clean up
  
   * All said, it is always good to clean up after you are done playing.
 
