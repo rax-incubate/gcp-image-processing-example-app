@@ -86,9 +86,9 @@ We assume this is done on an empty project without any specific restrictions. us
 
 ## Storage Setup
 
-  * Create bucket for the images. This can be named anything. This bucket needs to be publicly accessible as we will also use this in our public facing web interface.
+  * Create bucket for the images. Change the name to something unique. This bucket needs to be publicly accessible as we will also use this in our public facing web interface.
     ```
-    GCS_BUCKET='calvin-images'
+    export GCS_BUCKET='calvin-images-rfgs'
     gsutil mb -l us-east1 gs://$GCS_BUCKET
     gsutil iam ch allUsers:objectViewer gs://$GCS_BUCKET
     ```
@@ -182,16 +182,11 @@ This service uses Document AI to extract text from an image. Document AIS has se
     gcloud projects add-iam-policy-binding $PROJECT_ID \
     --member serviceAccount:$KMS_SERVICE_ACCOUNT \
     --role roles/pubsub.publisher
-
-    gcloud iam service-accounts add-iam-policy-binding \
-    $PROJECT_NUMBER-compute@developer.gserviceaccount.com \
-    --member serviceAccount\
-    --role roles/iam.serviceAccountUser
     ```
     
   * Update `env.yaml` with the right values.This file is passed to the cloud functions and the values show up as environment variables in the code. Leave DEBUGX to 1 for additional logging. View the env.yaml to make sure this formatted correctly.
     ```
-    echo -e "PROJECT_ID: \"$PROJECT_ID\"\nPROJECT_NO: \"$PROJECT_NUMBER\"\nPROC_LOCATION: \"us\"\nPROC_ID: \"$DAI_PROC_ID\"\nTOPIC_ID: \"calvin-text-extract\"\nDEBUGX: \"1\"" > env.yaml
+    echo -e "PROJECT_ID: \"$PROJECT_ID\"\nPROJECT_NO: \"$PROJECT_NUMBER\"\nPROC_LOCATION: \"us\"\nPROC_ID: \"$DAI_PROC_ID\"\nTOPIC_ID: \"images-text-extract\"\nDEBUGX: \"1\"" > env.yaml
     cat env.yaml
     ```
       * Sample env.yaml
@@ -204,7 +199,8 @@ This service uses Document AI to extract text from an image. Document AIS has se
       DEBUGX: "1"
       ```
 
-  * Deploy the extract-text function. This function will extract text using OCR. 
+  * Deploy the extract-text function. This function will extract text using OCR.  If you get an error around "Eventarc Service Agent", it is most likely because the API has not been enabled yet. Give it another 2-5 minutes and try again.
+
     ```
     cd $GCP_IMAGE_APP/extract-text
     gcloud functions deploy extract-text \
@@ -321,7 +317,6 @@ The concept with sentiment analysis is the same as the syntax service. We use th
      --retry \
      --project $PROJECT_ID
     ```
-
   * Review logs for function deployment. If there any errors, they will show up. We will do end to end tests later. 
     ```
     gcloud beta functions logs read extract-sentiment \
@@ -329,15 +324,15 @@ The concept with sentiment analysis is the same as the syntax service. We use th
      --limit=100 \
      --region=us-east1 \
      --project $PROJECT_ID
-    ```
+
 ## Extract entities
 
 Similar to the syntax service, this service uses the NLP API to extract entities from the extracted text. Entities are similar to the syntax, but instead of the entire parts of speech, this extracts specific entities like proper nouns, location and similar. The entity type, salience score and the metadata for entities for all text are then passed to a pub/sub topic for data processing. 
 
   * Update `env.yaml` with the right values. Leave DEBUGX to 1 for additional logging. View the env.yaml to make sure this formatted correctly.
     ```
-    cd $GCP_IMAGE_APP/extract-sentiment
-    echo -e "PROJECT_ID: \"$PROJECT_ID\"\nPROJECT_NO: \"$PROJECT_NUMBER\"\nTOPIC_ID: \"calvin-data-writer\"\nDEBUGX: \"1\"" > env.yaml
+    cd $GCP_IMAGE_APP/extract-entities
+    echo -e "PROJECT_ID: \"$PROJECT_ID\"\nPROJECT_NO: \"$PROJECT_NUMBER\"\nTOPIC_ID: \"images-data-writer\"\nDEBUGX: \"1\"" > env.yaml
     cat env.yaml
     ```
       * Sample env.yaml
@@ -362,7 +357,14 @@ Similar to the syntax service, this service uses the NLP API to extract entities
      --retry \
      --project $PROJECT_ID
     ```
-
+  * Review logs for function deployment. If there any errors, they will show up. We will do end to end tests later. 
+    ```
+    gcloud beta functions logs read extract-entities \
+     --gen2 \
+     --limit=100 \
+     --region=us-east1 \
+     --project $PROJECT_ID
+    ```
 
 ## Detect face data
 
@@ -465,7 +467,7 @@ This service takes care of images that are deleted from the GCS bucket. Again th
       PROJECT_ID: "calvin-h314"
       PROJECT_NO: "476719929030"
       BQ_DATASET_ID: "images"
-      BQ_TABLE_ID: "images_text"
+      BQ_TABLE_ID: "images_info"
       DEBUGX: "1"
 
   * Deploy the data-deleter function. 
@@ -577,27 +579,29 @@ One of the challenges of a micro-services architecture is to build observability
 
 If you have reached this far, you have a fully working application but to confirm let's do an end-to-end test.
 
-  * Run the following end-to-end test. This will upload a sample image and put it through the different stages of text extraction, syntax extraction, sentiment analysis and finally, delete the image. If you used a different GCS Bucket, update the GS_BUCKET variable in the code. If you are doing this in a demo, it is most likely to fail :-) 
+  * Run the following end-to-end test. This will upload a sample image and put it through the different stages of text extraction, syntax extraction, sentiment analysis and finally, delete the image. 
   ```
   cd $GCP_IMAGE_APP/tests
   python end-to-end-test.py 
   ```
   Expected output:
   ```
-  gsutil test file upload sample9fed94a72f3d454aba227a068704a33f.png: Success
-  Waiting 7 seconds...
-  Received event in Text extract service: Success
-  Waiting 7 seconds...
-  Text extraction: Success
-  Text syntax extraction: Success
-  Text sentiment extraction: Success
-  Web search: Success
-  gsutil test file delete: Success
-  Waiting 7 seconds...
-  Data Deleter: Success
+Test file upload sample46039567c71c4d8fb517f304b5f1af03.png: Success
+Checking event in Text extract service....:Success
+Checking Text extraction..:Success
+Checking Face detection service..:Success
+Checking Text Syntax extraction..:Success
+Checking Text Sentiment extraction..:Success
+Checking Text Entity extraction..:Success
+Checking Data writer..:Success
+Checking Web search..:Success
+Test file delete: Success
+Checking Data Deleter....:Success
+All Tests Passed
+
   ```
 
-  * If the above works, time to make this work with 100 images.
+  * If the above works, time to make this work with roughly 100 images. Note, some of the images in the sequence do not exist and so you will get errors. 
   ```
   gsutil -q cp -c gs://calvin.tty0.me/calvin-9{0..9}{0..9}.png  gs://$GCS_BUCKET/
   ```
@@ -608,7 +612,7 @@ If you have reached this far, you have a fully working application but to confir
   for s in "search=FLUSH" "search=Cookies" "sentiment=positive" "sentiment=negative" "entity_name=swimming" "entity_name=dynamite" "entity_type=location"; do echo $uri/?$s; done 
   ```
 
-  * If we need more images. This has 900+ images. You can test with all but your cost may go up a bit.  Note, you might see some errors with concurrency here. BQ supports 100 concurrent INSERT statements and so anything above will fail unless you queue them in code. The code does do some retries to avoid this but it won't work in all cases. The limit for DMLs like DELETE is 20 as well. 
+  * If we need more images. This has 900+ images. You can test with all but your cost may go up a bit. Note, some of the images in the sequence do not exist and so you will get errors.Also note, you might see some errors with concurrency here. BQ supports 100 concurrent INSERT statements and so anything above will fail unless you queue them in code. The code does do some retries to avoid this but it won't work in all cases. The limit for DMLs like DELETE is 20 as well. 
   ```
   gsutil -q cp -c gs://calvin.tty0.me/calvin-{6,7,8}{0..9}{0..9}.png  gs://$GCS_BUCKET/
   ```
