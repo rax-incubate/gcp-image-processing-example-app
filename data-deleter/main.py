@@ -11,21 +11,18 @@ from random import randrange
 
 @functions_framework.cloud_event
 # receive delete image events from GCS
-def new_text(cloud_event):
+def delete_image_data(cloud_event):
+    eid = uuid.uuid4().hex
     debugx = False
     if os.environ.get('DEBUGX') == "1":
         debugx = True
-
-    msg_content = base64.b64decode(cloud_event.data["message"]["data"]).decode()
-    json_data = json.loads(msg_content)
-
-    if "eid" in json_data:
-        eid = json_data['eid']
-    else:
-        eid = uuid.uuid4().hex
+    data = cloud_event.data
+    event_type = cloud_event["type"]
+    bucket = data["bucket"]
+    filename = data["name"]
 
     if debugx:
-        print(f"DEBUGX:" + eid + ":" + msg_content)
+        print(f"DEBUGX:{eid}:Event type:{event_type},Bucket:{bucket},File:{filename}")
     delete_data(bucket, filename, eid)
 
 
