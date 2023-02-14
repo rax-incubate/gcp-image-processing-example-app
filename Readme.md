@@ -45,6 +45,7 @@ At a high level,
 ## Pre-requisites
 
  * Admin access to a GCP project
+ * A usable shell like bash
  * Google Cloud CLI
  * Google Cloud storage CLI
  * BigQuery CLI
@@ -79,9 +80,9 @@ We assume this is done on an empty project without any specific restrictions. us
 
   * Setup your env variables.
     ```
-    PROJECT_ID=$(gcloud config get-value project)
-    PROJECT_NUMBER=$(gcloud projects list --filter="project_id:$PROJECT_ID" --format='value(project_number)')
-    GCP_IMAGE_APP="<your git clone folder>"
+    export PROJECT_ID=$(gcloud config get-value project)
+    export PROJECT_NUMBER=$(gcloud projects list --filter="project_id:$PROJECT_ID" --format='value(project_number)')
+    export GCP_IMAGE_APP="<your git clone folder>"
     ```
 
 ## Storage Setup
@@ -237,6 +238,12 @@ This service uses Document AI to extract text from an image. Document AIS has se
       extract-text  2023-02-01 16:03:10.950  THESE DUMB
       ```
 
+      * These errors can be ignored.
+      ```
+      LOG: Container Sandbox: Unsupported syscall UNKNOWN[435/0x1b3](0x3e670d76cb50,0x58,0x3e0bb1e94850,0x8,0x3e0bae000640,0x3e670d76cc6f). It is very likely that you can safely ignore this message and that this is not the cause of any error you might be troubleshooting. Please, refer to https://gvisor.dev/docs/user_guide/compatibility/linux/amd64/#UNKNOWN[435/0x1b3] for more information.
+      ```
+
+
   * Delete the image. At this point we have the most basic of functions in place and the start of event stream.
     ```
     gsutil rm gs://$GCS_BUCKET/sample.png
@@ -305,7 +312,7 @@ The concept with sentiment analysis is the same as the syntax service. We use th
 
   * Deploy the extract-sentiment function. 
     ```
-    cd $CLONE_FOLDER/extract-sentiment
+    cd $GCP_IMAGE_APP/extract-sentiment
     gcloud functions deploy extract-sentiment \
      --gen2 \
      --runtime=python310 \
@@ -345,7 +352,7 @@ Similar to the syntax service, this service uses the NLP API to extract entities
 
   * Deploy the extract-entities function. 
     ```
-    cd $CLONE_FOLDER/extract-entities
+    cd $GCP_IMAGE_APP/extract-entities
     gcloud functions deploy extract-entities \
      --gen2 \
      --runtime=python310 \
@@ -386,7 +393,7 @@ We use the Vision API for this purpose. Unlike the previous one, this receives t
 
   * Deploy the detect-faces function. 
     ```
-    cd $CLONE_FOLDER/detect-faces
+    cd $GCP_IMAGE_APP/detect-faces
     gcloud functions deploy detect-faces \
      --gen2 \
      --runtime=python310 \
@@ -429,7 +436,7 @@ This service does a simple job of taking values and writing them into Big Query.
       ```
   * Deploy the data-writer function. 
     ```
-    cd $CLONE_FOLDER/data-writer
+    cd $GCP_IMAGE_APP/data-writer
     gcloud functions deploy data-writer \
      --gen2 \
      --runtime=python310 \
@@ -546,7 +553,7 @@ One of the challenges of a micro-services architecture is to build observability
   ```
   cd $GCP_IMAGE_APP/monitoring
   gcloud monitoring dashboards create \
-  --project $PROJECT_ID\
+  --project $PROJECT_ID \
   --config-from-file cloud-monitoring-dashboard.json
   ```
 
