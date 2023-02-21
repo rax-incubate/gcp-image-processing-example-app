@@ -175,7 +175,7 @@ This service uses Document AI to extract text from an image. Document AIS has se
         curl -s -X GET -H "Authorization: Bearer $(gcloud auth print-access-token)" -H "Content-Type: application/json; charset=utf-8" "https://us-documentai.googleapis.com/v1/projects/$PROJECT_ID/locations/us/processors"
         ```
 
-  * Grant IAM access to the KMS service account & compute engine service account
+  * Grant IAM access to pub/sub to the KMS service account 
 
     ```
     KMS_SERVICE_ACCOUNT=$(gsutil kms serviceaccount -p $PROJECT_NUMBER)
