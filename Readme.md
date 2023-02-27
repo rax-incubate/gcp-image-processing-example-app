@@ -610,7 +610,7 @@ All Tests Passed
 
   * If the above works, time to make this work with roughly 100 images. Note, some of the images in the sequence do not exist and so you will get errors. 
   ```
-  gsutil -q cp -c gs://calvin.tty0.me/calvin-9{0..9}{0..9}.png  gs://$GCS_BUCKET/
+  gsutil -m -q cp -c gs://calvin.tty0.me/calvin-9{0..9}{0..9}.png  gs://$GCS_BUCKET/
   ```
 
   * Time to leave the boring console and code to go read some of the comics using the different URLs below. You can experiment with other searches.  
@@ -621,8 +621,35 @@ All Tests Passed
 
   * If we need more images. This has 900+ images. You can test with all but your cost may go up a bit. Note, some of the images in the sequence do not exist and so you will get errors.Also note, you might see some errors with concurrency here. BQ supports 100 concurrent INSERT statements and so anything above will fail unless you queue them in code. The code does do some retries to avoid this but it won't work in all cases. The limit for DMLs like DELETE is 20 as well. 
   ```
-  gsutil -q cp -c gs://calvin.tty0.me/calvin-{6,7,8}{0..9}{0..9}.png  gs://$GCS_BUCKET/
+  gsutil -m -q cp -c gs://calvin.tty0.me/calvin-{6,7,8}{0..9}{0..9}.png  gs://$GCS_BUCKET/
   ```
+
+  * If you like XKCD more, the above can be replaced very easily with those images. Here's a subset of those images for testing.
+
+    * Deploy a new function with the same code but new name.  Currently Cloud functions does not support having two different GCS buckets triggers to the same function. We could use pub/sub for this use-case but is just simple to keep the rest of the logic the same and deploy two functions.
+    ```
+    cd $GCP_IMAGE_APP/extract-text
+    export GCS_BUCKET=xkcd-rfgs
+    gsutil mb -l us-east1 gs://$GCS_BUCKET
+    gsutil iam ch allUsers:objectViewer gs://$GCS_BUCKET
+    gcloud functions deploy extract-text-xkcd \
+     --gen2 \
+     --runtime=python310 \
+     --region=us-east1 \
+     --source=. \
+     --entry-point=new_image_file \
+     --trigger-event-filters="type=google.cloud.storage.object.v1.finalized" \
+     --trigger-event-filters="bucket=$GCS_BUCKET"  \
+     --env-vars-file env.yaml \
+     --project $PROJECT_ID
+     ```
+
+    * Upload the XKCD images
+    ```
+    gsutil -q -m cp -c gs://xkcd.tty0.me/*.png  gs://$GCS_BUCKET/
+    ```
+
+    * Browse the webapp. The app is built to handle the two buckets and you can filter by them.
 
 ## Cost governance
 
