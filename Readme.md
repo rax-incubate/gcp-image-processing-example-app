@@ -4,7 +4,7 @@ Look at the art of possible with GCP's optical text extraction, natural language
 
 # Presentation
 
-[https://docs.google.com/presentation/d/1F7AaabUfBDi8aZw0WI1FT5tL9KvYQ0wCqDOFxFuz-Zs/edit?usp=sharing][Google Slides]
+[Google Slides](https://docs.google.com/presentation/d/1F7AaabUfBDi8aZw0WI1FT5tL9KvYQ0wCqDOFxFuz-Zs/edit?usp=sharing)
 
 
 # Summary
