@@ -138,9 +138,9 @@ def new_request(request):
         """)
 
             html.append("Sentiment:")
-            html.append("<a href={}?bucket={}&sentiment=positive>positive</a> | ".format(request.base_url), bucket)
-            html.append("<a href={}?bucket={}&sentiment=negative>negative</a> | ".format(request.base_url), bucket)
-            html.append("<a href={}?bucket={}&sentiment=neutral>neutral</a> | ".format(request.base_url), bucket)
+            html.append("<a href={}?bucket={}&sentiment=positive>positive</a> | ".format(request.base_url, bucket))
+            html.append("<a href={}?bucket={}&sentiment=negative>negative</a> | ".format(request.base_url, bucket))
+            html.append("<a href={}?bucket={}&sentiment=neutral>neutral</a> | ".format(request.base_url, bucket))
             html.append("<br>")
 
             ent_type_filter_query = f"SELECT e.type,count(e.type) as e_cnt FROM {bq_dataset_id}.{bq_table_id} , UNNEST(entities) e WHERE bucket='{bucket}' AND e.type != 'OTHER' GROUP by e.type ORDER by e_cnt DESC LIMIT 20"
