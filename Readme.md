@@ -2,6 +2,11 @@
 
 Look at the art of possible with GCP's optical text extraction, natural language processing and vision APIs. Extract, process, classify text from a large collection of images and assign labels to faces in the images.
 
+# Presentation
+
+[https://docs.google.com/presentation/d/1F7AaabUfBDi8aZw0WI1FT5tL9KvYQ0wCqDOFxFuz-Zs/edit?usp=sharing][Google Slides]
+
+
 # Summary
 
 The following is an experiment with AI services and Cloud functions on GCP using a sample application.  We will be doing the following:-
@@ -755,3 +760,5 @@ We suggest the following :-
  * Build your own code with the example above
 
  * Share your experiments
+
+[Google Slides]: https://docs.google.com/presentation/d/1F7AaabUfBDi8aZw0WI1FT5tL9KvYQ0wCqDOFxFuz-Zs/edit?usp=sharing
