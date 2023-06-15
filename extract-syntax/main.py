@@ -29,7 +29,7 @@ def new_text(cloud_event):
     extract_syntax(msg_content, eid)
 
 
-# extract word tokens and filter by figures of speech
+# extract word tokens and filter by parts of speech
 def extract_syntax(msg_content, eid):
     debugx = False
     if os.environ.get('DEBUGX') == "1":
